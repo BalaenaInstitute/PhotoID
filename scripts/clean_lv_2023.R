@@ -9,8 +9,19 @@ library(tidyr)
 library(readr)
 library(here)
 
+path = here::here("catalogue_files//")
 
-LV_SS <- read.csv(here("catalogue_files/Original/LV_SSMasterDorsal_March19.csv"), colClasses = ("Date" = "character") )
+#2021
+LV_SS <- read.csv(here("catalogue_files/Original/LV_SS_Master_1988-2021-ReliableColumn.csv"), colClasses = ("Date" = "character") )
+
+version =2021
+
+
+# #2019
+# LV_SS <- read.csv(here("catalogue_files/Original/LV_SSMasterDorsal_March19.csv"), colClasses = ("Date" = "character") )
+# 
+# version = 2019
+# #previous version
 # LV_SS <- read.csv("catalogue_files/LV_SS_MASTER_Sept3.csv", colClasses = ("Date" = "character") )
 
 
@@ -157,22 +168,19 @@ LV_SS$QRATE = as.numeric(LV_SS$QRATE)
             Id_Year2 =Id_Year%>%group_by(ID, ID.side, Sex, Sex1, YEAR1, YEARLAST, ANIMAL_YRS)%>%
               summarise(N = n())%>%ungroup()%>%mutate(ID = as.numeric(ID))
 
-            write_csv(Id_Year2, here("catalogue_files/ID_SEX_MASTER_OLD.csv"))
+            write_csv(Id_Year2, paste(path, "ID_SEX_MASTER_", version, ".csv", sep =""))
             
             #make simple version for merging
             LV_SS1 = LV_SS%>%select(ID.side, QRATE,Date,Location,
                                     Reliable,Sex, ID )
       
             
-            write_csv(LV_SS, here("catalogue_files/LV_SS_MASTER_OLD.csv"))
-            
-            
 # # #export clean version for socprog-------
       #still need to open in excel and format date column there for some reason...?
        SOCPROGNBW_2019 = select(LV_SS,
                                 c("QRATE","Date","Date.Original","Location", "Latitude", "Longitude",
                                   "side", "Reliable","Sex", "ID"))
-            write.csv(SOCPROGNBW_2019, here("socprog/SOCPROGNBW_2019.csv"), row.names = FALSE)
+            write.csv(SOCPROGNBW_2019, paste(here("socprog//"), "SOCPROGNBW_", version, ".csv", sep =""), row.names = FALSE)
 # #
 # # #supplementary data for sex-----
  SOCPROG_SUPDATA = LV_SS%>% group_by(ID,YEAR)%>%
@@ -184,7 +192,7 @@ LV_SS$QRATE = as.numeric(LV_SS$QRATE)
               group_by(ID, side, Sex, Year_rel)%>% summarise(count=n())
             
  
-            write.csv(SOCPROG_SUPDATA, here("socprog/SOCPROG_SUPDATA2019.csv"), row.names = FALSE)
+            write.csv(SOCPROG_SUPDATA, paste(here("socprog//"), "SOCPROG_SUPDATA", version, ".csv", sep =""), row.names = FALSE)
             
 
            
