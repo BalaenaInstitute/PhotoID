@@ -93,12 +93,11 @@ LV_SS$QRATE = as.numeric(LV_SS$QRATE)
    
    # ALL M/FJ categories-----
    
-    LV_SS=LV_SS%>%mutate( Sex = ifelse(YEAR == 2019 & Biopsy == "YES", "Female",
-                                       ifelse(grepl("Female,", keyword), "FemaleJ", 
+    LV_SS=LV_SS%>%mutate( Sex = ifelse(grepl("Female,", keyword), "FemaleJ", 
                                         ifelse(grepl("Male,", keyword), "MaleM",
                                                ifelse(grepl("MM,", keyword), "MaleM",
                                                       ifelse(grepl("FJ", keyword), "FemaleJ",
-                                                NA))))))
+                                                NA)))))
    #
     
     #check by ID - 242 has both FJ and UNK..
@@ -121,7 +120,7 @@ LV_SS$QRATE = as.numeric(LV_SS$QRATE)
     BiopsyNA = LV_SS%>%group_by(ID, Sex, Biopsy)%>%filter( Sex == "UNK")%>%summarise(N = n())
     
     # Total IDs
-    Total_ID = LV_SS%>%group_by(ID, Sex)%>%summarise(N = n())
+    Total_ID = LV_SS%>%group_by(ID, Sex, YEAR)%>%summarise(N = n())
     
      
             
@@ -154,7 +153,7 @@ LV_SS$QRATE = as.numeric(LV_SS$QRATE)
             LV_SS2 = left_join(LV_SS, Id_Year)
             
             
-            #creat an master ID - sex summary table
+            #create a master ID - sex summary table
             Id_Year2 =Id_Year%>%group_by(ID, ID.side, Sex, Sex1, YEAR1, YEARLAST, ANIMAL_YRS)%>%
               summarise(N = n())%>%ungroup()%>%mutate(ID = as.numeric(ID))
 
@@ -176,8 +175,12 @@ LV_SS$QRATE = as.numeric(LV_SS$QRATE)
             write.csv(SOCPROGNBW_2019, here("socprog/SOCPROGNBW_2019.csv"), row.names = FALSE)
 # #
 # # #supplementary data for sex-----
- SOCPROG_SUPDATA = LV_SS%>% group_by(ID, YEAR)%>%
-              mutate(Year_rel = ifelse(Reliable == "Yes", min(YEAR), NA))%>%select(ID, Sex, side, Year_rel) %>%
+ SOCPROG_SUPDATA = LV_SS%>% group_by(ID,YEAR)%>%
+              mutate(Year_rel = ifelse(Reliable == "Yes", min(YEAR), 9999))%>%
+              group_by(ID)%>%
+              mutate(Year_rel = min(Year_rel, na.rm = T))%>%
+              mutate(Year_rel = ifelse(Year_rel == 9999, NA, Year_rel))%>%
+              select(ID, Sex, side, Year_rel) %>%
               group_by(ID, side, Sex, Year_rel)%>% summarise(count=n())
             
  
