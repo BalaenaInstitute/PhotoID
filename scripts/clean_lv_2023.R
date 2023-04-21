@@ -7,16 +7,14 @@ library(dplyr)
 library(stringr)
 library(tidyr)
 library(readr)
-# install.packages("here")
 library(here)
 
 
 LV_SS <- read.csv(here("catalogue_files/Original/LV_SSMasterDorsal_March19.csv"), colClasses = ("Date" = "character") )
-# LV_SS <- read.csv("/Users/chirp/DRIVE/PHD/METHODS/Photo_ID/catalogue_files/LV_SS_MASTER_Sept3.csv", colClasses = ("Date" = "character") )
+# LV_SS <- read.csv("catalogue_files/LV_SS_MASTER_Sept3.csv", colClasses = ("Date" = "character") )
 
 
 #clean variables--------
-    #LV_SS = as.data.frame(LV_SS)
     LV_SS$X= NULL
     LV_SS$X.1= NULL
     
@@ -40,16 +38,6 @@ LV_SS <- read.csv(here("catalogue_files/Original/LV_SSMasterDorsal_March19.csv")
     LV_SS$Date =  as.Date(LV_SS$Date1, "%Y-%m-%d")
     summary(LV_SS$Date)
     LV_SS = LV_SS%>%mutate(YEAR = as.numeric(format(Date, "%Y")))
-    
-        # #something in februrary seems suspicious----
-    # feb= "1990-02-01"
-    # mar = "1990-03-01"
-    # #1990-02-11
-    # LV_SS[LV_SS$Date1 >= feb & LV_SS$Date1 <= mar,]
-    # 
-    # LV_SS=LV_SS%>%mutate(Date1 = ifelse(grepl("1990-02-11", Date), "1990-07-11", Date1))
-    # 
-    # LV_SS$Date =  as.Date(LV_SS$Date1, "%Y-%m-%d")
        
     
     #recode SIDE------
@@ -110,10 +98,8 @@ LV_SS$QRATE = as.numeric(LV_SS$QRATE)
                                         ifelse(grepl("Male,", keyword), "MaleM",
                                                ifelse(grepl("MM,", keyword), "MaleM",
                                                       ifelse(grepl("FJ", keyword), "FemaleJ",
-                                                             
-                                                             
-                                                             
                                                 NA))))))
+   #
     
     #check by ID - 242 has both FJ and UNK..
     LV_SS = LV_SS%>%group_by(ID)%>%fill(Sex, .direction = "downup")%>%
@@ -161,28 +147,11 @@ LV_SS$QRATE = as.numeric(LV_SS$QRATE)
             #one photo from each year
             Id_Year = unique(Id_Year)
             
-            # #summary IDs by year
-            # sum_year = Id_Year%>%group_by(YEAR,  side, ID)%>%summarise()%>%
-            #   summarise(count = n())%>%filter(side == "Right")
-            # 
-            # sum_year$YEAR
-            
-            # write_csv(sum_year, "~/DRIVE/CODE/PhotoID/catalogue_files/sum_year.csv")
-            
-            #summary Photos by year
-            # sum_year = Id_Year%>%group_by(YEAR,  side, File.name)%>%summarise()%>%
-            #   summarise(count = n())%>%filter(side == "Left")
-            # 
-            # sum_year$YEAR
-            
-            # write_csv(sum_year, "~/DRIVE/CODE/PhotoID/catalogue_files/sum_year.csv")
-            
             #make animal years
             Id_Year = Id_Year%>%mutate(ANIMAL_YRS = YEARLAST-YEAR1)
             
             #add back animal years to phot based on ID links
             LV_SS2 = left_join(LV_SS, Id_Year)
-            
             
             
             #creat an master ID - sex summary table
@@ -205,7 +174,6 @@ LV_SS$QRATE = as.numeric(LV_SS$QRATE)
                                 c("QRATE","Date","Date.Original","Location", "Latitude", "Longitude",
                                   "side", "Reliable","Sex", "ID"))
             write.csv(SOCPROGNBW_2019, here("socprog/SOCPROGNBW_2019.csv"), row.names = FALSE)
-# #
 # #
 # # #supplementary data for sex-----
  SOCPROG_SUPDATA = LV_SS%>% group_by(ID, YEAR)%>%
