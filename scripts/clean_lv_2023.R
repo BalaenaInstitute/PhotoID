@@ -21,6 +21,7 @@ version =2021
 # LV_SS <- read.csv(here("catalogue_files/Original/LV_SSMasterDorsal_March19.csv"), colClasses = ("Date" = "character") )
 # 
 # version = 2019
+
 # #previous version
 # LV_SS <- read.csv("catalogue_files/LV_SS_MASTER_Sept3.csv", colClasses = ("Date" = "character") )
 
