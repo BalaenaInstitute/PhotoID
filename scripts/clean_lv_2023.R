@@ -9,7 +9,7 @@ pacman::p_load(dplyr, here, tidyverse, stringr, readr, sf, "rnaturalearth", viri
 
 
 #2023
-LV_SS <- read.csv(here("catalogue_files/DRAFT-Listview-ScotianShelf-1988-2023.csv"), colClasses = ("character") )
+LV_SS <- read.csv(here("catalogue_files/DRAFT-Listview-ScotianShelf-1988-2023-v2.csv"), colClasses = ("character") )
 
 version =2023
 
@@ -22,12 +22,13 @@ version =2023
     #clean ID
      LV_SS=LV_SS%>%mutate(ID = ifelse(grepl("unk", Title), NA, 
                                      ifelse(grepl("see crops", Title), NA,
-                                            ifelse(grepl("FIX", Title),"FIX", Title))))
+                                            ifelse(grepl("56R", Title),"56",
+                                            ifelse(grepl("FIX", Title),"FIX", Title)))))
     
     summary(as.factor(LV_SS$ID)) #check if there are issues
     
-    LV_SS%>%filter(ID == "FIX")
-    fix = LV_SS <- LV_SS[!is.na(LV_SS$ID),]
+    fix = LV_SS%>%filter(ID == "FIX")
+     LV_SS <- LV_SS[!is.na(LV_SS$ID),]
 
     #clean date format-----
     LV_SS =  LV_SS%>%mutate(Date = as.Date(Date1, "%Y-%m-%d"))
@@ -71,7 +72,7 @@ version =2023
     LV_SS=LV_SS%>%mutate(Latitude = as.numeric(Latitude), Longitude = as.numeric(Longitude), 
                          Location = ifelse(Longitude <= -58.7 | grepl("Gully", keyword), "Gully", 
                                            ifelse(Longitude < -58.1 & Longitude >= -58.7, "Shortland",
-                                                  ifelse(Longitude >= -58.1, "Halidmand", 
+                                                  ifelse(Longitude >= -58.1, "Haldimand", 
                                                           "??"))))
       
       LV_SS[LV_SS$Location =="??",]   
@@ -81,23 +82,25 @@ version =2023
       
       # Use these limits for xlims and ylims
       
-      xmin = -60
+      xmin = -60.1
       ymin = 43.5
-      xmax = -57.5
+      xmax = -57.8
       ymax =44.5
       xlims <- c(xmin, xmax)
       ylims <- c(ymin, ymax)
       
       world <- ne_countries(scale = "medium", returnclass = "sf")
-      LV_SS_sf = st_as_sf(LV_SS%>%filter(!is.na(Longitude)), coords = c("Longitude", "Latitude"), crs = 4326)
+      
+      LV_SS_sf = st_as_sf(LV_SS%>%filter(!is.na(Longitude)), coords = c("Longitude", "Latitude"), crs = 4326)%>%
+        mutate(Location = factor(Location, levels = c("Gully", "Shortland","Haldimand")))
       
       ggplot()+ geom_sf(data = world, color=NA, fill="grey70")   +
-        geom_sf(data = st_jitter(LV_SS_sf, factor =.0075), alpha = .75, size = 3.5,  
+        geom_sf(data = st_jitter(LV_SS_sf, factor =.0075), alpha = .5, size = 3.5,  
                 aes(col= Location, fill = Location, shape =Location))  +
         theme_light(base_size = 18)+
         scale_fill_manual(name = "Canyon", values = viridis_pal(option = "plasma", direction = -1)(3))+
         scale_color_manual(name = "Canyon", values = viridis_pal(option = "plasma", direction = -1)(3))+
-        scale_shape_manual(name = "Canyon", values = c(21, 17, 8))+
+        scale_shape_manual(name = "Canyon", values = c(21, 17, 18))+
         theme(legend.position = "bottom")+guides(fill=guide_legend(ncol=4), base_size = 18)+
         
         coord_sf(lims_method = "orthogonal", xlim = xlims, ylim = ylims, crs = 4326, expand = T)      
@@ -161,8 +164,10 @@ version =2023
                                            ID.side = paste0(ID,  sep = "-", side1))%>%ungroup()%>%
               mutate(Sex1 = ifelse(is.na(Sex1), "UNK", Sex1))
     
-           
-            Id_day = LV_SS %>% filter(QRATE>2)%>%
+    summary(as.factor(LV_SS$Sex1 )) #check
+    
+            
+    Id_day = LV_SS %>% filter(QRATE>2)%>%
               group_by(Date)%>%summarise()
              
             
@@ -186,12 +191,10 @@ version =2023
             
             
             #create a master ID - sex summary table
-            
-           
-            Id_Year2 =Id_Year%>%group_by(ID, ID.side, Sex, Sex1, YEAR1, YEARLAST, ANIMAL_YRS)%>%
-              summarise(N = n())%>%ungroup()%>%mutate(ID = as.numeric(ID))
-
-            
+              Id_Year2 =Id_Year%>%group_by(ID, ID.side, Sex, Sex1, YEAR1, YEARLAST, ANIMAL_YRS)%>%
+              summarise(N = n())%>%ungroup() %>%mutate(ID = as.numeric(ID))
+              
+              
             #write file
             path = "OUTPUT\\"
             write_csv(Id_Year2, paste(path, "ID_SEX_MASTER_", version, ".csv", sep =""))
