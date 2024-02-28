@@ -4,3 +4,6 @@
 .Ruserdata
 .PhotoID.Rprog
 *.csv
+catalogue_files**
+
+socprog**
