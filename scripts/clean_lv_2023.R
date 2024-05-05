@@ -11,7 +11,7 @@ pacman::p_load(dplyr, here, tidyverse, stringr, readr, sf, "rnaturalearth", viri
 #2023
 LV_SS <- read.csv(here("catalogue_files/DRAFT-Listview-ScotianShelf-1988-2023-v2.csv"), colClasses = ("character") )
 
-version =2023
+version <- "2023_05"
 
 
 #clean variables--------
@@ -125,14 +125,19 @@ version =2023
       # ALL M/FJ categories
    
     LV_SS=LV_SS%>%mutate( Sex = ifelse(grepl("Female,", keyword), "FemaleJ", 
+                                       ifelse(grepl("F,", keyword), "FemaleJ", 
                                         ifelse(grepl("Male,", keyword), "MaleM",
+                                               ifelse(grepl("M,", keyword), "MaleM",
                                                ifelse(grepl("MM,", keyword), "MaleM",
                                                       ifelse(grepl("FJ", keyword), "FemaleJ",
-                                                NA)))))
+                                                NA)))))))
     summary(as.factor(LV_SS$Sex))
     
-    #check by ID - 242 has both FJ and UNK..
-    LV_SS = LV_SS%>%group_by(ID)%>%fill(Sex, .direction = "downup")%>%
+    #summarize to check #'s as keywords can change...
+   sex_sum =  LV_SS%>%group_by(ID, Sex)%>%summarise(N = n())%>%na.omit()
+   
+   #check by ID - 242 has both FJ and UNK..
+       LV_SS = LV_SS%>%group_by(ID)%>%fill(Sex, .direction = "downup")%>%
       mutate(Sex = ifelse(is.na(Sex), "UNK", Sex))%>%ungroup()
     
     summary(as.factor(LV_SS$Sex))
@@ -217,8 +222,11 @@ version =2023
               group_by(ID)%>%
               mutate(Year_rel = min(Year_rel, na.rm = T))%>%
               mutate(Year_rel = ifelse(Year_rel == 9999, NA, Year_rel))%>%
-              select(ID, Sex, side, Year_rel) %>%
-              group_by(ID, side, Sex, Year_rel)%>% summarise(count=n())
+              mutate(Sex = case_when( Sex =="MaleM" ~"M",
+                                     Sex == "FemaleJ"~ "F",
+                                     TRUE ~ "UNK"))%>%
+              select(ID, Sex, Age = ANIMAL_YRS, side, Year_rel) %>%
+              group_by(ID, Sex, Age, Year_rel)%>% summarise()
             
  
             write.csv(SOCPROG_SUPDATA, paste(path, "SOCPROG_SUPDATA", version, ".csv", sep =""), row.names = FALSE)
