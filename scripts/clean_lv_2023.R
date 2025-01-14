@@ -117,20 +117,21 @@ version <- "2023_05"
    
    #biopsy----
    LV_SS=LV_SS%>%mutate(Biopsy = ifelse(grepl("biopsy", keyword), "YES", NA))
-   LV_SS = LV_SS%>%group_by(ID)%>%fill(Biopsy)
+   LV_SS = LV_SS%>%group_by(ID)%>%fill(Biopsy)%>%ungroup()
    
    
  
     #sex code-------
       # ALL M/FJ categories
    
-    LV_SS=LV_SS%>%mutate( Sex = ifelse(grepl("Female,", keyword), "FemaleJ", 
-                                       ifelse(grepl("F,", keyword), "FemaleJ", 
+    LV_SS=LV_SS%>%mutate( Sex = ifelse(grepl("FemaleJ,", keyword), "FemaleJ", 
+                                       ifelse(grepl("F,", keyword), "FemaleJ",
                                         ifelse(grepl("Male,", keyword), "MaleM",
                                                ifelse(grepl("M,", keyword), "MaleM",
                                                ifelse(grepl("MM,", keyword), "MaleM",
                                                       ifelse(grepl("FJ", keyword), "FemaleJ",
                                                 NA)))))))
+   # ))))
     summary(as.factor(LV_SS$Sex))
     
     #summarize to check #'s as keywords can change...
@@ -216,19 +217,20 @@ version <- "2023_05"
                                   "side", "Reliable","Sex", "ID"))
             write.csv(SOCPROGNBW_2019, paste(path, "SOCPROGNBW_", version, ".csv", sep =""), row.names = FALSE)
 # #
-# # #supplementary data for sex-----
- SOCPROG_SUPDATA = LV_SS%>% group_by(ID,YEAR)%>%
+# # #supplementary data for sex in social analysis-----
+ SOCPROG_SUPDATA = LV_SS%>% group_by(ID,YEAR)%>% 
               mutate(Year_rel = ifelse(Reliable == "Yes", min(YEAR), 9999))%>%
               group_by(ID)%>%
               mutate(Year_rel = min(Year_rel, na.rm = T))%>%
               mutate(Year_rel = ifelse(Year_rel == 9999, NA, Year_rel))%>%
+              mutate(Reliable = ifelse(is.na(Year_rel), F, T))%>%
               mutate(Sex = case_when( Sex =="MaleM" ~"M",
                                      Sex == "FemaleJ"~ "F",
                                      TRUE ~ "UNK"))%>%
-              select(ID, Sex, Age = ANIMAL_YRS, side, Year_rel) %>%
-              group_by(ID, Sex, Age, Year_rel)%>% summarise()
+              select(ID, Sex, Age = ANIMAL_YRS, Reliable) %>%
+              group_by(ID, Sex, Reliable)%>% summarise()
             
- 
+
             write.csv(SOCPROG_SUPDATA, paste(path, "SOCPROG_SUPDATA", version, ".csv", sep =""), row.names = FALSE)
             
 
