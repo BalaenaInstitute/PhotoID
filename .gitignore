@@ -5,5 +5,7 @@
 .PhotoID.Rprog
 *.csv
 catalogue_files**
-
+INPUT**
+.DS_Store
+OUTPUT**
 socprog**
