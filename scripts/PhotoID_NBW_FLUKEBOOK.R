@@ -1,12 +1,11 @@
-#clean Listview Photo ID export from LR catalogue and format 
-#results in LV_ID df that can be used for bulk import to Flukebook
+library(dplyr)
+library(readr)
+library(stringr)
+library(lubridate)
+library(writexl)
+library(fs)
 
-#this can be run from top to bottom
-
-# Simple script to process CSVs in multiple folders
-pacman::p_load(dplyr, stringr, readr, writexl, fs, lubridate)
-
-# Set base directory (update this for your actual folder path)
+# Set base directory
 base_dir <- "/Users/chirp/Documents/PROJECTS/PhotoID2024/HQ_Dorsals_2024/Flukebook/BulkImports"
 
 # Find all CSV files in nested directories
@@ -21,12 +20,29 @@ process_csv <- function(csv_path) {
     # Read CSV WITHOUT dropping NA columns
     df <- read_csv(csv_path, locale = locale(encoding = "UTF-8"), show_col_types = FALSE)
     
-    # Ensure required columns exist, add missing ones
-    required_columns <- c("File name", "Latitude", "Longitude", "Date Original")
+    # Rename "File name" to "File.name" if it exists
+    if ("File name" %in% names(df)) {
+      df <- df %>% rename(File.name = `File name`)
+    }
+    
+    # Print column names for debugging
+    cat("✔ Found columns:", colnames(df), "\n")
+    
+    # Ensure required columns exist
+    required_columns <- c("File.name", "Latitude", "Longitude", "Date Original")
     for (col in required_columns) {
       if (!(col %in% names(df))) {
         df[[col]] <- NA  # Create missing column with NA values
       }
+    }
+    
+    # Drop rows where "File.name" is NA
+    df <- df %>% filter(!is.na(File.name))
+    
+    # If all rows were removed, skip processing this file
+    if (nrow(df) == 0) {
+      cat("⚠️ No valid records after filtering NA filenames. Skipping:", csv_path, "\n")
+      return(NULL)
     }
     
     # Fix "Date Original" encoding issues and extract components
@@ -48,17 +64,23 @@ process_csv <- function(csv_path) {
         Encounter.specificEpithet = "ampullatus"
       )
     
-    # Standardize filename case
-    if ("File name" %in% names(df)) {
-      df <- df %>%
-        mutate(
-          Encounter.mediaAsset0 = str_replace('File name', "\\.JPG$", ".jpg")
-        )
-    }
-    
-    # Rename and select required columns for Flukebook
+    # ✅ FIX: Use `case_when()` to safely process filenames
     df <- df %>%
-        select(
+      mutate(
+        File.name = as.character(File.name),  # Ensure it's character
+        Encounter.mediaAsset0 = case_when(
+          !is.na(File.name) & File.name != "" ~ str_replace(File.name, "\\.JPG", ".jpg"),
+          TRUE ~ NA_character_  # Keep NA values intact
+        )
+      )
+    
+    # Print sample output for debugging
+    cat("🔎 Sample Encounter.mediaAsset0 values:\n")
+    print(head(df$Encounter.mediaAsset0, 10))
+    
+    # Select required columns
+    df <- df %>%
+      select(
         Encounter.mediaAsset0, Encounter.genus, Encounter.specificEpithet,
         Latitude, Longitude, Encounter.year, Encounter.month, Encounter.day,
         Encounter.submitterID
