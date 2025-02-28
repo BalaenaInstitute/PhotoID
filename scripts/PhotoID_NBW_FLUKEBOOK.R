@@ -1,21 +1,20 @@
-library(dplyr)
-library(readr)
-library(stringr)
-library(lubridate)
-library(writexl)
-library(fs)
+#Script to format LV output for bulk import to FB based on daily best photos for NBW annual catalogue
+#2024 Laura Feyrer
 
-# Set base directory
+# Load required libraries using pacman----
+pacman::p_load(dplyr, readr, stringr, lubridate, writexl, fs)
+
+# Set base directory----
 base_dir <- "/Users/chirp/Documents/PROJECTS/PhotoID2024/HQ_Dorsals_2024/Flukebook/BulkImports"
 
-# Find all CSV files in nested directories
+# Find all CSV files in nested directories----
 csv_files <- fs::dir_ls(base_dir, recurse = TRUE, glob = "*.csv")
 cat("Found", length(csv_files), "CSV files to process\n")
 
-# Create an empty list to store processed data frames
+# Create an empty list to store processed data frames----
 processed_list <- list()
 
-# Function to process each CSV file
+# Function to process each CSV file----
 process_csv <- function(csv_path) {
   tryCatch({
     cat("\n🔹 Processing:", csv_path, "\n")
@@ -96,7 +95,7 @@ process_csv <- function(csv_path) {
         Encounter.submitterID
       )
     
-    # Save cleaned data to XLSX
+    # Save cleaned data to individual XLSX files in the folders for tracking
     output_xlsx <- file.path(dirname(csv_path), paste0(tools::file_path_sans_ext(basename(csv_path)), "_cleaned_FB.xlsx"))
     writexl::write_xlsx(df, output_xlsx)
     
@@ -111,17 +110,17 @@ process_csv <- function(csv_path) {
   })
 }
 
-# Apply function to all CSV files and store processed data
+# Apply function to all CSV files and store processed data----
 processed_list <- lapply(csv_files, process_csv)
 
 # Remove NULL elements (files that were skipped or failed)
 processed_list <- processed_list[!sapply(processed_list, is.null)]
 
-# Compile all data into a single dataframe
+# Compile all data into a single dataframe----
 if (length(processed_list) > 0) {
   compiled_df <- bind_rows(processed_list)
   
-  # Save compiled data to a single XLSX file in the base directory
+  # Save compiled data to a single XLSX file in the base directory for import to fluke book
   compiled_output <- file.path(base_dir, "Compiled_Cleaned_FB.xlsx")
   writexl::write_xlsx(compiled_df, compiled_output)
   cat("\n✅ Compiled", nrow(compiled_df), "records into:", compiled_output, "\n")
