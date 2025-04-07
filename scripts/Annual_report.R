@@ -145,7 +145,7 @@ gg_Fig2path =  here::here("OUTPUT/FIGS/Fig_1MAP.png")
 ggsave(gg_Fig2path, map,dpi = 300)
 
 
-#summary stats
+#summary stats-----
 # Total IDs
 
 Sum_IDs = LV_SS%>%group_by(ID)%>%summarise(ID_N = n()) #all days
@@ -231,7 +231,7 @@ freq_plot = ggplot(heatmap_data, aes(x = Date, y = ID_label, fill = n_encounters
   theme_classic() +
   theme(
     axis.text.x = element_text(angle = 45, vjust = 0.75, hjust = 1, size = 9),
-    axis.text.y = element_markdown(size = 9, margin = margin(r = 6)),
+    axis.text.y = element_markdown(size = 10, margin = margin(r = 6)),
     panel.grid = element_blank()
   )
 

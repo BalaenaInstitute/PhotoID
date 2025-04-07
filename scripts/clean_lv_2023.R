@@ -9,7 +9,7 @@ pacman::p_load(dplyr, here, tidyverse, stringr, readr, sf, "rnaturalearth", viri
 
 
 #2023
-LV_SS <- read.csv(here("catalogue_files/DRAFT-Listview-ScotianShelf-1988-2023-v2.csv"), colClasses = ("character") )
+LV_SS <- read.csv(here("INPUT/catalogue_files/DRAFT-Listview-ScotianShelf-1988-2023-v2.csv"), colClasses = ("character") )
 
 version <- "2023_05"
 
@@ -200,7 +200,12 @@ version <- "2023_05"
               Id_Year2 =Id_Year%>%group_by(ID, ID.side, Sex, Sex1, YEAR1, YEARLAST, ANIMAL_YRS)%>%
               summarise(N = n())%>%ungroup() %>%mutate(ID = as.numeric(ID))
               
-              
+  #n years in catalogue
+              years = Id_day%>%mutate(YEAR = as.numeric(format(Date, "%Y")))%>%select(-Date)
+              years = unique(years)
+                     
+              write_csv(years, "OUTPUT/cat_yrs.csv")
+                   
             #write file
             path = "OUTPUT\\"
             write_csv(Id_Year2, paste(path, "ID_SEX_MASTER_", version, ".csv", sep =""))
