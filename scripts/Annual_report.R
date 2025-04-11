@@ -148,7 +148,9 @@ ggsave(gg_Fig2path, map,dpi = 300)
 #summary stats-----
 # Total IDs
 
+Sum_ID_side = LV_SS%>%group_by(ID, side)%>%summarise(ID_N = n()) #all days
 Sum_IDs = LV_SS%>%group_by(ID)%>%summarise(ID_N = n()) #all days
+
 N2024 = Sum_IDs %>%
   filter(as.numeric(ID) >= 6700)
 #total old IDs
