@@ -55,10 +55,11 @@ clean_catalogue <- function(file_path) {
     # Assign sex safely to preserve UNKs where no sex is
     mutate(Sex = case_when(
       str_detect(Keywords, "\\bFemale-Juvenile\\b") ~ "FemaleJ",
-      str_detect(Keywords, "\\bSum_F\\b") ~ "FemaleJ",
-      str_detect(Keywords, "\\bSum_M\\b") ~ "MaleM",
-      str_detect(Keywords, "\\bMM\\b") ~ "MaleM",
+      str_detect(Keywords, "\\bSex_F\\b") ~ "FemaleJ",
       str_detect(Keywords, "\\bFJ\\b") ~ "FemaleJ",
+      str_detect(Keywords, "\\bSex_M\\b") ~ "MaleM",
+      str_detect(Keywords, "\\bMM\\b") ~ "MaleM",
+     
       TRUE ~ "UNK"
     ))
     
