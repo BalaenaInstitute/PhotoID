@@ -68,7 +68,7 @@ clean_catalogue <- function(file_path) {
 }
 
 #output LV------
-annual_mel <- clean_catalogue(here("INPUT/catalogue_files/LV_melons_2024.csv"))
+annual_mel <- clean_catalogue(here("INPUT/catalogue_files/SS_LV_Sex_2024.csv"))
 primary_mel <- clean_catalogue(here("INPUT/catalogue_files/LV_melons_primary.csv"))
 
 
@@ -157,3 +157,5 @@ sex_mismatch <- sex_comparison %>%
 sex_mismatch
 
 write_csv(sex_mismatch, "OUTPUT/sex_mismatch_2024.csv")
+
+
