@@ -1,5 +1,5 @@
-#format LV for transporter import
-
+#format LV for transporter import of sex infos
+#Updated by Laura Feyrer 2025
 
 clean_LV <- function(file_path) {
   
@@ -15,11 +15,11 @@ clean_LV <- function(file_path) {
     )) %>%
     # Assign sex safely to preserve UNKs where no sex is
     mutate(Sex = case_when(
-      str_detect(Keywords, "\\bSex_F\\b") ~ "FemaleJ",
-      str_detect(Keywords, "\\bSex_M\\b") ~ "MaleM",
+      str_detect(Keywords, "\\bSex_F\\b") ~ "FJ",
+      str_detect(Keywords, "\\bSex_M\\b") ~ "MM",
       TRUE ~ "UNK"
     ))%>%
-    # change comma to semi-colon
+    # change comma to semi-colon - only needed if importing multiple keywords
     mutate(Keywords = str_replace_all(Keywords, ",", ";"))
   
   return(df_clean)
@@ -36,6 +36,7 @@ sex_sum %>%
   group_by(ID) %>%
   filter(n() > 1)
 
+#write sex sum by ID to import into dorsal cat
 write_csv(sex_sum, "OUTPUT/Format_SexID_2024.csv")
 
 
