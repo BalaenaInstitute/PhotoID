@@ -3,6 +3,8 @@ pacman::p_load(dplyr, here, tidyverse, stringr, readr, sf, here)
 
 #a function to clean the input LRCAT generically regardless of year
 
+LV_SS1988_2024$`Keyword-export`
+
 clean_dorsal_catalogue <- function(file_path) {
   
   df <- read.csv(file_path, colClasses = "character")
@@ -10,7 +12,7 @@ clean_dorsal_catalogue <- function(file_path) {
   df_clean <- df %>%
     # Rename variables
     mutate(Date1 = Date.Original,
-           keyword = Keyword.export) %>%
+           Keywords = Keyword.export) %>%
     
     # Clean ID: only remove unknowns or problematic crops
     mutate(ID = case_when(
@@ -25,8 +27,8 @@ clean_dorsal_catalogue <- function(file_path) {
     
     # Recode Side
     mutate(side = case_when(
-      str_detect(keyword, regex("Left", ignore_case = TRUE)) ~ "Left",
-      str_detect(keyword, regex("Right", ignore_case = TRUE)) ~ "Right",
+      str_detect(Keywords, regex("Left", ignore_case = TRUE)) ~ "Left",
+      str_detect(Keywords, regex("Right", ignore_case = TRUE)) ~ "Right",
       TRUE ~ "UNK"
     )) %>%
     filter(side != "UNK") %>%
@@ -41,35 +43,35 @@ clean_dorsal_catalogue <- function(file_path) {
     )) %>%
     
     # Reliable marks
-    mutate(Reliable = ifelse(str_detect(keyword, "Indent|Notch"), "Yes", "No")) %>%
+    mutate(Reliable = ifelse(str_detect(Keywords, "Indent|Notch"), "Yes", "No")) %>%
     
     # Location classification
     mutate(Latitude = as.numeric(Latitude),
            Longitude = as.numeric(Longitude),
            Location = case_when(
-             Longitude <= -58.7 | str_detect(keyword, "Gully") ~ "Gully",
+             Longitude <= -58.7 | str_detect(Keywords, "Gully") ~ "Gully",
              Longitude < -58.1 & Longitude > -58.7 ~ "Shortland",
              Longitude >= -58.1 ~ "Haldimand",
              TRUE ~ "??"
            )) %>%
     
     # Film or Digital
-    mutate(Film = ifelse(str_detect(keyword, "Digital") | YEAR >= 2015, "Digital", "Film")) %>%
+    mutate(Film = ifelse(str_detect(Keywords, "Digital") | YEAR >= 2015, "Digital", "Film")) %>%
     
     # Biopsy detection
-    mutate(Biopsy = ifelse(str_detect(keyword, regex("biopsy", ignore_case = TRUE)), "YES", NA)) %>%
+    mutate(Biopsy = ifelse(str_detect(Keywords, regex("biopsy", ignore_case = TRUE)), "YES", NA)) %>%
     group_by(ID) %>%
     fill(Biopsy, .direction = "downup") %>%
     ungroup() %>%
     
-    # Assign Sex
+    # Assign sex safely to preserve UNKs where no sex is
     mutate(Sex = case_when(
-      str_detect(keyword, "FemaleJ,") ~ "FemaleJ",
-      str_detect(keyword, "F,") ~ "FemaleJ",
-      str_detect(keyword, "Male,") ~ "MaleM",
-      str_detect(keyword, "M,") ~ "MaleM",
-      str_detect(keyword, "MM,") ~ "MaleM",
-      str_detect(keyword, "FJ") ~ "FemaleJ",
+      str_detect(Keywords, "\\bFemaleJ\\b") ~ "FemaleJ",
+      str_detect(Keywords, "\\bbiopsy-Female\\b") ~ "FemaleJ",
+      str_detect(Keywords, "\\bMale\\b") ~ "MaleM",
+      str_detect(Keywords, "\\bbiopsy-Male\\b") ~ "MaleM",
+      
+    
       TRUE ~ NA_character_
     )) %>%
     group_by(ID) %>%
@@ -96,7 +98,31 @@ clean_dorsal_catalogue <- function(file_path) {
   return(df_clean)
 }
 
-LV_SS <- clean_dorsal_catalogue(here("INPUT/catalogue_files/DRAFT-Listview-ScotianShelf-1988-2023-v2.csv"))
+LV_SS <- clean_dorsal_catalogue(here("INPUT/catalogue_files/LV_SS1988_2024.csv"))
+
+
+# Function to assess when there are multiple distinct Sex classes ("FemaleJ" vs. "MaleM") exist per ID.
+# # If there's more than one distinct Sex for an ID, it flags it.
+
+check_conflicting_sex <- function(df) {
+  conflicting_ids <- df %>%
+    filter(Sex %in% c("MaleM", "FemaleJ")) %>%
+    group_by(ID) %>%
+    summarise(unique_sexes = n_distinct(Sex)) %>%
+    filter(unique_sexes > 1) %>%
+    pull(ID)
+  
+  return(conflicting_ids)
+}
+
+#check conflicting sex records----
+
+conflicting_sex_ids = check_conflicting_sex(LV_SS)
+
+check = LV_SS %>%
+  filter(ID %in% conflicting_sex_ids) %>%
+  select(ID, Date, Sex) %>%
+  arrange(ID, Date)
 
 # A function called write_clean_outputs().
 # 

@@ -1,5 +1,5 @@
 # Script to check LV_SSMASTER_Nov13 for 2019 biopsies
-# Written by Claude - 2025-05-13
+# Written - 2025-05-13
 
 # Libraries ------------
 pacman::p_load(dplyr, tidyverse, stringr, readxl, here, lubridate)
