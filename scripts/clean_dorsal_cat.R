@@ -1,9 +1,12 @@
 #libraries------------
 pacman::p_load(dplyr, here, tidyverse, stringr, readr, sf, here)
 
+output_path = "OUTPUT/"
+version <- format(Sys.Date(), "%Y-%m-%d")   
+
 #a function to clean the input LRCAT generically regardless of year
 
-LV_SS1988_2024$`Keyword-export`
+
 
 clean_dorsal_catalogue <- function(file_path) {
   
@@ -80,7 +83,7 @@ clean_dorsal_catalogue <- function(file_path) {
     ungroup() %>%
     
     # Genetics-only Sex (Biopsy + Sex)
-    mutate(Sex1 = case_when(
+    mutate(Sex_genetics= case_when(
       Sex == "FemaleJ" & Biopsy == "YES" ~ "Female",
       Sex == "MaleM" & Biopsy == "YES" ~ "Male",
       TRUE ~ NA_character_
@@ -93,12 +96,12 @@ clean_dorsal_catalogue <- function(file_path) {
       TRUE ~ "UNK"
     ),
     ID.side = paste0(ID, "-", side1),
-    Sex1 = ifelse(is.na(Sex1), "UNK", Sex1))
+    Sex_genetics = ifelse(is.na(Sex_genetics), "UNK", Sex_genetics))
   
   return(df_clean)
 }
 
-LV_SS <- clean_dorsal_catalogue(here("INPUT/catalogue_files/LV_SS1988_2024.csv"))
+LV_SS <- clean_dorsal_catalogue(here("INPUT/catalogue_files/LV_SS2024_06112025.csv"))
 
 
 # Function to assess when there are multiple distinct Sex classes ("FemaleJ" vs. "MaleM") exist per ID.
@@ -124,6 +127,15 @@ check = LV_SS %>%
   select(ID, Date, Sex) %>%
   arrange(ID, Date)
 
+#for primary sex summary----
+
+primary_sex <- LV_SS %>%
+  mutate(ID = ifelse(ID == "xxxx", "5003", 
+                     ifelse(ID == "56R", "560",ID)))%>% distinct(ID, Sex) %>%
+  rename(Sex_primary = Sex)%>%arrange(desc((ID)))
+
+write_csv(primary_sex, paste0(output_path, "primary_sex_", version, ".csv"))
+
 # A function called write_clean_outputs().
 # 
 # It generates and saves:
@@ -134,7 +146,7 @@ check = LV_SS %>%
 # 
 # SOCPROG_SUPDATA (SOCPROG_SUPDATA_<version>.csv)
 
-write_clean_outputs <- function(df, version = "v1", output_path = "OUTPUT/") {
+write_clean_outputs <- function(df, version, output_path ) {
   
   # Create master ID table
   Id_Year <- df %>%
@@ -145,11 +157,11 @@ write_clean_outputs <- function(df, version = "v1", output_path = "OUTPUT/") {
     mutate(YEAR1 = as.numeric(format(FirstDate, "%Y")),
            YEARLAST = as.numeric(format(LastDate, "%Y")),
            ANIMAL_YRS = YEARLAST - YEAR1) %>%
-    select(ID, ID.side, side, Sex, Sex1, QRATE, Reliable, keyword, YEAR1, YEARLAST, ANIMAL_YRS) %>%
+    select(ID, ID.side, side, Sex, Sex_genetics, QRATE, Reliable, keyword, YEAR1, YEARLAST, ANIMAL_YRS) %>%
     distinct() 
   
   Id_Year2 <- Id_Year %>%
-    group_by(ID, ID.side, Sex, Sex1, YEAR1, YEARLAST, ANIMAL_YRS) %>%
+    group_by(ID, ID.side, Sex, Sex_genetics, YEAR1, YEARLAST, ANIMAL_YRS) %>%
     summarise(N = n(), .groups = "drop") %>%
     mutate(ID = as.numeric(ID))
   
