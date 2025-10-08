@@ -3,17 +3,17 @@
 #2025 Laura Feyrer
 
 # Load required libraries using pacman----
-pacman::p_load(dplyr, readr, readxl, stringr, lubridate, writexl, fs)
+pacman::p_load(dplyr, readr, readxl, stringr, lubridate, writexl, fs, here)
 
 # 
 # Load FB export-----
-input_file <- "INPUT/FB_files/encounterSearchResults_export_LJFeyrer2024.xls"
+input_file <- "INPUT/FB_files/drone_LV.xlsx"
 fb <- read_excel(input_file)
 
 # Extract relevant columns
 fb_clean <- fb %>%
-  select(filename= `Encounter.mediaAsset0`,
-         id = `Name0.value`) 
+  rename( `Encounter.mediaAsset0` = `File name`,
+          `Name0.value` = Title) 
 # %>%
 #   mutate(
 #     # Reconstruct filename by inserting likely underscores

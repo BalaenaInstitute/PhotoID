@@ -5,7 +5,7 @@
 pacman::p_load(dplyr, readr, stringr, lubridate, writexl, fs)
 
 # Set base directory----
-base_dir <- "/Users/chirp/Documents/PROJECTS/PhotoID2024/HQ_Dorsals_2024/Flukebook/BulkImports"
+base_dir <- "/Users/chirp/Documents/PROJECTS/PhotoID/Aerial test_flukebook"
 
 # Find all CSV files in nested directories----
 csv_files <- fs::dir_ls(base_dir, recurse = TRUE, glob = "*.csv")
