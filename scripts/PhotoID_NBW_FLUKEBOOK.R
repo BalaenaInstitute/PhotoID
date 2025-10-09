@@ -1,84 +1,89 @@
 #Script to format LV output for bulk import to FB based on daily best photos for NBW annual catalogue
-#2024 Laura Feyrer
+#Updated October 2025 Laura Feyrer
 
 # Load required libraries using pacman----
 pacman::p_load(dplyr, readr, stringr, lubridate, writexl, fs)
 
-# Set base directory----
-base_dir <- "/Users/chirp/Documents/PROJECTS/PhotoID/Aerial test_flukebook"
+# CHANGE AS NEEDED: ----
+
+      #Set base directory
+      base_dir <- "~/your/file/path/here"
+      submitterID = "LJFeyrer"
+      locationID = "Scotian Shelf"
+
 
 # Find all CSV files in nested directories----
-csv_files <- fs::dir_ls(base_dir, recurse = TRUE, glob = "*.csv")
-cat("Found", length(csv_files), "CSV files to process\n")
+      csv_files <- fs::dir_ls(base_dir, recurse = TRUE, glob = "*.csv")
+      cat("Found", length(csv_files), "CSV files to process\n")
 
 # Create an empty list to store processed data frames----
-processed_list <- list()
+      processed_list <- list()
 
 # Function to process each CSV file----
-process_csv <- function(csv_path) {
-  tryCatch({
-    cat("\n🔹 Processing:", csv_path, "\n")
+      process_csv <- function(csv_path) {
+        tryCatch({
+          cat("\n🔹 Processing:", csv_path, "\n")
+          
+          # Read CSV WITHOUT dropping NA columns
+          df <- read_csv(csv_path, locale = locale(encoding = "UTF-8"), show_col_types = FALSE)
+          
+          # Rename "File name" to "File.name" if it exists
+          if ("File name" %in% names(df)) {
+            df <- df %>% rename(File.name = `File name`)
+          }
+          
+          # Print column names for debugging
+          cat("✔ Found columns:", colnames(df), "\n")
+          
+          # Ensure required columns exist
+          required_columns <- c("File.name", "Latitude", "Longitude", "Date Original")
+          for (col in required_columns) {
+            if (!(col %in% names(df))) {
+              df[[col]] <- NA  # Create missing column with NA values
+            }
+          }
+          
+          # Drop rows where "File.name" is NA
+          df <- df %>% filter(!is.na(File.name))
+          
+          # If all rows were removed, skip processing this file
+          if (nrow(df) == 0) {
+            cat("⚠️ No valid records after filtering NA filenames. Skipping:", csv_path, "\n")
+            return(NULL)
+          }
+          
+          # ✅ FIX: Remove hidden characters from "Date Original"
+          df <- df %>%
+            mutate(`Date Original` = str_replace_all(`Date Original`, "[^0-9APM:/\\- ]", ""))  # Strip unexpected characters
+          
+          # ✅ FIX: Print sample date values for debugging
+          cat("🔎 Sample Date Original values BEFORE parsing:\n")
+          print(head(df$`Date Original`, 10))
+          
+          # ✅ FIX: Handle AM/PM formats explicitly
+          df <- df %>%
+            mutate(
+              Date = case_when(
+                str_detect(`Date Original`, "AM|PM") ~ parse_date_time(`Date Original`, orders = c("mdy HMS p", "mdy HM p", "ymd HMS p", "ymd HM p"), quiet = TRUE),
+                TRUE ~ parse_date_time(`Date Original`, orders = c("ymd HMS", "ymd HM", "ymd"), quiet = TRUE)
+              ),
+              Encounter.year = year(Date),
+              Encounter.month = month(Date),
+              Encounter.day = day(Date)
+            )
+          
+          # ✅ FIX: Print unparsed dates for debugging
+          if (any(is.na(df$Date))) {
+            cat("⚠️ Warning: Some dates could not be parsed\n")
+            cat("Unparsed Date Original values:\n")
+            print(df$`Date Original`[is.na(df$Date)])
+          }
     
-    # Read CSV WITHOUT dropping NA columns
-    df <- read_csv(csv_path, locale = locale(encoding = "UTF-8"), show_col_types = FALSE)
-    
-    # Rename "File name" to "File.name" if it exists
-    if ("File name" %in% names(df)) {
-      df <- df %>% rename(File.name = `File name`)
-    }
-    
-    # Print column names for debugging
-    cat("✔ Found columns:", colnames(df), "\n")
-    
-    # Ensure required columns exist
-    required_columns <- c("File.name", "Latitude", "Longitude", "Date Original")
-    for (col in required_columns) {
-      if (!(col %in% names(df))) {
-        df[[col]] <- NA  # Create missing column with NA values
-      }
-    }
-    
-    # Drop rows where "File.name" is NA
-    df <- df %>% filter(!is.na(File.name))
-    
-    # If all rows were removed, skip processing this file
-    if (nrow(df) == 0) {
-      cat("⚠️ No valid records after filtering NA filenames. Skipping:", csv_path, "\n")
-      return(NULL)
-    }
-    
-    # ✅ FIX: Remove hidden characters from "Date Original"
-    df <- df %>%
-      mutate(`Date Original` = str_replace_all(`Date Original`, "[^0-9APM:/\\- ]", ""))  # Strip unexpected characters
-    
-    # ✅ FIX: Print sample date values for debugging
-    cat("🔎 Sample Date Original values BEFORE parsing:\n")
-    print(head(df$`Date Original`, 10))
-    
-    # ✅ FIX: Handle AM/PM formats explicitly
+    # Add Flukebook metadata - need to change these as required
     df <- df %>%
       mutate(
-        Date = case_when(
-          str_detect(`Date Original`, "AM|PM") ~ parse_date_time(`Date Original`, orders = c("mdy HMS p", "mdy HM p", "ymd HMS p", "ymd HM p"), quiet = TRUE),
-          TRUE ~ parse_date_time(`Date Original`, orders = c("ymd HMS", "ymd HM", "ymd"), quiet = TRUE)
-        ),
-        Encounter.year = year(Date),
-        Encounter.month = month(Date),
-        Encounter.day = day(Date)
-      )
-    
-    # ✅ FIX: Print unparsed dates for debugging
-    if (any(is.na(df$Date))) {
-      cat("⚠️ Warning: Some dates could not be parsed\n")
-      cat("Unparsed Date Original values:\n")
-      print(df$`Date Original`[is.na(df$Date)])
-    }
-    
-    # Add Flukebook metadata
-    df <- df %>%
-      mutate(
-        Encounter.submitterID = "LJFeyrer",
-        Encounter.locationID = "Scotian Shelf",
+        Encounter.submitterID = submitterID,
+        Encounter.locationID = locationID,
         Encounter.genus = "Hyperoodon",
         Encounter.specificEpithet = "ampullatus"
       )
@@ -91,7 +96,7 @@ process_csv <- function(csv_path) {
     df <- df %>%
       select(
         Encounter.mediaAsset0, Encounter.genus, Encounter.specificEpithet,
-        Latitude, Longitude, Encounter.year, Encounter.month, Encounter.day,
+        Latitude, Longitude, Encounter.year, Encounter.month, Encounter.day, Encounter.locationID,
         Encounter.submitterID
       )
     
