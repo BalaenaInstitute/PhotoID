@@ -94,18 +94,18 @@ LV_SS_sf = st_as_sf(LV_SS%>%filter(!is.na(Longitude)), coords = c("Longitude", "
 
 #load basemap shapes
 #NBW Habitat Areas ---------
-NBW_CH<- read_sf(here::here("~/CODE/shapefiles/SAR_CH/NBW_CH/NorthernBottlenoseWhale_CH.shp"))
+NBW_CH<- read_sf("shapefiles/NBW_CH/NorthernBottlenoseWhale_CH.shp")
 #read in Gully Zones, 
-Gully <- read_sf(here::here("~/CODE/shapefiles/ProtectedAreas/DFO/Gully/Gully_MPA.shp"))
+Gully <- read_sf("Gully/Gully_MPA.shp")
 ##NBW IMP HAB 2023 area  
-nbw_ImHab = read_sf(here::here("~/CODE/shapefiles/ImpHabitat/Feyreretal2024/NBW_ImHab_edit.shp"))%>%
+nbw_ImHab = read_sf("Feyreretal2024/NBW_ImHab_edit.shp")%>%
   st_transform(4326)
 #land
-land <- read_sf(here::here("~/CODE/shapefiles/coastline/worldcountries/ne_50m_admin_0_countries.shp"))%>%
+land <- read_sf("worldcountries/ne_50m_admin_0_countries.shp")%>%
   dplyr::filter(CONTINENT == "North America")
 
 # this bathy data is a bit smoother
-bathy <- read_sf(here::here("~/CODE/shapefiles/Bathymetry/bathymetry_pl_v2/bathymetry_l_v2.shp"))%>%
+bathy <- read_sf("bathymetry_pl_v2/bathymetry_l_v2.shp")%>%
   st_transform(4326)
 #filter 
 bathy = bathy%>%
