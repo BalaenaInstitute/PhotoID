@@ -6,9 +6,9 @@ pacman::p_load(dplyr, here, tidyverse, stringr, readr, sf, "rnaturalearth", viri
 here()
 
 #2024
-LV_SS <- read.csv(here("INPUT/catalogue_files/List_View_2024.csv"), colClasses = ("character") )
+LV_SS <- read.csv(here("INPUT/catalogue_files/LV_SS_Primary_1988-2025-Jan182026.csv"), colClasses = ("character") )
 
-version <- "2024_v1"
+version <- "2025_v1"
 
 
 #clean variables--------
@@ -73,10 +73,10 @@ LV_SS=LV_SS%>%mutate(Latitude = as.numeric(Latitude), Longitude = as.numeric(Lon
 
 LV_SS[LV_SS$Location =="??",]   
 summary(as.factor(LV_SS$Location ))   #check if there are issues
-LV_SS%>%filter(YEAR == 2024)%>%group_by(Location)%>%summarise(count = n())
+LV_SS%>%filter(YEAR == 2025)%>%group_by(Location)%>%summarise(count = n())
 
-#hard set to Gully for 2024
-LV_SS = LV_SS%>%mutate(Location == "Gully")
+# #hard set to Gully for 2024
+# LV_SS = LV_SS%>%mutate(Location == "Gully")
 #check on Map----
 
 # Use these limits for xlims and ylims
@@ -96,16 +96,16 @@ LV_SS_sf = st_as_sf(LV_SS%>%filter(!is.na(Longitude)), coords = c("Longitude", "
 #NBW Habitat Areas ---------
 NBW_CH<- read_sf("shapefiles/NBW_CH/NorthernBottlenoseWhale_CH.shp")
 #read in Gully Zones, 
-Gully <- read_sf("Gully/Gully_MPA.shp")
+Gully <- read_sf("shapefiles/Gully/Gully_MPA.shp")
 ##NBW IMP HAB 2023 area  
-nbw_ImHab = read_sf("Feyreretal2024/NBW_ImHab_edit.shp")%>%
+nbw_ImHab = read_sf("shapefiles/Feyreretal2024/NBW_ImHab_edit.shp")%>%
   st_transform(4326)
 #land
-land <- read_sf("worldcountries/ne_50m_admin_0_countries.shp")%>%
+land <- read_sf("shapefiles/worldcountries/ne_50m_admin_0_countries.shp")%>%
   dplyr::filter(CONTINENT == "North America")
 
 # this bathy data is a bit smoother
-bathy <- read_sf("bathymetry_pl_v2/bathymetry_l_v2.shp")%>%
+bathy <- read_sf("shapefiles/bathymetry_pl_v2/bathymetry_l_v2.shp")%>%
   st_transform(4326)
 #filter 
 bathy = bathy%>%
@@ -151,10 +151,10 @@ ggsave(gg_Fig2path, map,dpi = 300)
 Sum_ID_side = LV_SS%>%group_by(ID, side)%>%summarise(ID_N = n()) #all days
 Sum_IDs = LV_SS%>%group_by(ID)%>%summarise(ID_N = n()) #all days
 
-N2024 = Sum_IDs %>%
-  filter(as.numeric(ID) >= 6700)
+N2025 = Sum_IDs %>%
+  filter(as.numeric(ID) >= 6800)
 #total old IDs
-count(Sum_IDs)- count(N2024)
+count(Sum_IDs)- count(N2025)
 
 Sum_side = LV_SS%>%group_by(side, ID)%>%summarise(ID_N = n())%>%summarise(ID_N = n())
 
@@ -178,12 +178,12 @@ library(forcats)
 # Convert datetime column
 LV_SS <- LV_SS %>%
   mutate(
-    datetime = parse_date_time(Date.Original, orders = "ymd IMS p"),  # includes AM/PM
+    datetime = ymd_hms(Date.Original, quiet = TRUE),
     date = as.Date(datetime)
   )
 
 # Assign encounter groups: new group starts if time gap > 30 mins
-LV_SS_encounters <- LV_SS %>%
+LV_SS_encounters <- LV_SS %>%filter(YEAR == 2025)%>%
   arrange(ID, datetime) %>%
   group_by(ID) %>%
   mutate(
@@ -200,7 +200,7 @@ heatmap_data <- LV_SS_encounters %>%
   count(ID, date, name = "n_encounters") %>%
   mutate(
     ID_numeric = as.numeric(as.character(ID)),
-    ID_flag = ifelse(ID_numeric >= 6700, "new", "old"),
+    ID_flag = ifelse(ID_numeric >= 6800, "new", "old"),
     ID_label = ifelse(ID_flag == "new",
                       paste0("<span style='color:firebrick;'>", ID, "</span>"),
                       as.character(ID))
@@ -239,5 +239,5 @@ freq_plot = ggplot(heatmap_data, aes(x = Date, y = ID_label, fill = n_encounters
 
 freq_plot
 # Save
-gg_Figpath = here::here("OUTPUT/FIGS/Fig_2freq.png")
+gg_Figpath = here::here("OUTPUT/FIGS/Fig_2025freq.png")
 ggsave(gg_Figpath, freq_plot, width = 8, height = 16, units = "in", dpi = 300)
