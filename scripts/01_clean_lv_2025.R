@@ -2,7 +2,7 @@
 # Script 1: Clean Listview Export from SS Dorsal Catalogue - BASE CLEANING
 # Author: Laura Joan Feyrer
 # Date Updated: 2026-02-09
-# Description: Core data cleaning and variable extraction. NO variable propagation or 
+# Description: Core data cleaning and variable extraction. NO propagation or 
 #              filling operations. Outputs intermediate clean data for QA review.
 # Changes from previous: Separated base cleaning from QA and finalization
 # ==============================================================================
@@ -35,31 +35,63 @@ LV_SS <- LV_SS %>%
 
 
 # CLEAN INDIVIDUAL ID-------
-# Extract whale ID from Title field, handling special cases
+# Extract whale ID from Title field
+# Strategy: Keep ID_original for reference, then convert to numeric (non-numeric becomes NA)
 LV_SS <- LV_SS %>%
   mutate(
-    ID = case_when(
-      grepl("unk", Title) ~ NA_character_,
-      grepl("see crops", Title) ~ NA_character_,
-      grepl("56R", Title) ~ "56",
-      grepl("FIX", Title) ~ "FIX",
-      TRUE ~ Title
-    )
+    ID_original = Title,  # Keep original for reference
+    ID = Title
   )
 
-# Check for issues in ID assignment
 cat("\n=== ID CLEANING ===\n")
-cat("Records flagged as FIX:", sum(LV_SS$ID == "FIX", na.rm = TRUE), "\n")
+cat("Total records:", nrow(LV_SS), "\n")
 
-# Identify records flagged for fixing
-fix <- LV_SS %>% filter(ID == "FIX")
+# Check for non-numeric IDs BEFORE cleaning
+non_numeric_check <- suppressWarnings(as.numeric(LV_SS$ID))
+non_numeric_ids <- LV_SS %>%
+  mutate(ID_numeric_test = suppressWarnings(as.numeric(ID))) %>%
+  filter(is.na(ID_numeric_test)) %>%
+  group_by(ID, ID_original) %>%
+  summarise(N_Photos = n(), .groups = "drop") %>%
+  arrange(desc(N_Photos))
+
+if (nrow(non_numeric_ids) > 0) {
+  cat("\n=== NON-NUMERIC IDs DETECTED ===\n")
+  cat("Found", nrow(non_numeric_ids), "non-numeric ID values:\n\n")
+  print(non_numeric_ids)
+  
+  # Export for manual review
+  write_csv(non_numeric_ids, here("OUTPUT/non_numeric_ids_to_review.csv"))
+  cat("\nExported for review: OUTPUT/non_numeric_ids_to_review.csv\n")
+  
+  # Convert to numeric (non-numeric becomes NA automatically)
+  cat("\n=== CONVERTING IDs TO NUMERIC ===\n")
+  cat("Using as.numeric() - any non-numeric ID becomes NA automatically\n")
+  cat("Examples: 'UNK', 'UNK-1', '56R', 'FIX', 'See Crops' → all become NA\n\n")
+  
+  LV_SS <- LV_SS %>%
+    mutate(ID = as.character(suppressWarnings(as.numeric(ID))))
+  
+  # Report results
+  total_non_numeric_photos <- sum(non_numeric_ids$N_Photos)
+  cat("Photos with non-numeric IDs converted to NA:", total_non_numeric_photos, "\n")
+  cat("These photos will be removed in the next step.\n")
+} else {
+  cat("\n✓ All IDs are numeric\n")
+  # Still convert to numeric format for consistency
+  LV_SS <- LV_SS %>%
+    mutate(ID = as.character(as.numeric(ID)))
+}
 
 # Remove records with missing or empty IDs
+cat("\n=== REMOVING RECORDS WITH NO VALID ID ===\n")
+cat("Records before filtering:", nrow(LV_SS), "\n")
+
 LV_SS <- LV_SS %>%
   filter(!is.na(ID), ID != "")
 
-cat("Records after removing missing IDs:", nrow(LV_SS), "\n")
-cat("Unique IDs:", n_distinct(LV_SS$ID), "\n")
+cat("Records after removing missing/invalid IDs:", nrow(LV_SS), "\n")
+cat("Final unique IDs:", n_distinct(LV_SS$ID), "\n")
 
 
 # DATE FORMATTING-------
@@ -85,11 +117,61 @@ LV_SS <- LV_SS %>%
       grepl("Right|right", keyword) ~ "Right",
       TRUE ~ "UNK"
     )
-  ) %>%
-  filter(side != "UNK")
+  )
 
 cat("\n=== SIDE CLASSIFICATION ===\n")
+cat("Records before filtering:", nrow(LV_SS), "\n")
+
+# Check for photos without side information
+unknown_sides <- LV_SS %>%
+  filter(side == "UNK")
+
+if (nrow(unknown_sides) > 0) {
+  unknown_sides_summary <- unknown_sides %>%
+    group_by(ID, ID_original) %>%
+    summarise(
+      N_Photos = n(),
+      Sample_Keywords = paste(head(unique(keyword), 3), collapse = " | "),
+      .groups = "drop"
+    )
+  
+  # Calculate dates separately for IDs that have valid dates
+  unknown_sides_dates <- unknown_sides %>%
+    filter(!is.na(Date)) %>%
+    group_by(ID, ID_original) %>%
+    summarise(
+      First_Date = min(Date),
+      Last_Date = max(Date),
+      .groups = "drop"
+    )
+  
+  # Merge back
+  unknown_sides_summary <- unknown_sides_summary %>%
+    left_join(unknown_sides_dates, by = c("ID", "ID_original")) %>%
+    arrange(desc(N_Photos))
+  
+  cat("\n⚠ WARNING: Found", nrow(unknown_sides_summary), "IDs with photos missing side information\n")
+  cat("Total photos without side:", sum(unknown_sides_summary$N_Photos), "\n\n")
+  
+  # Show summary
+  print(head(unknown_sides_summary, 20))
+  
+  if (nrow(unknown_sides_summary) > 20) {
+    cat("\n... (showing first 20 of", nrow(unknown_sides_summary), "IDs)\n")
+  }
+  
+  # Export for review
+  write_csv(unknown_sides_summary, here("OUTPUT/photos_without_side_info.csv"))
+  cat("\nExported full list: OUTPUT/photos_without_side_info.csv\n")
+  cat("These photos will be removed in the next step.\n\n")
+}
+
+# Remove photos without side information
+LV_SS <- LV_SS %>%
+  filter(side != "UNK")
+
 cat("Records after removing unknown sides:", nrow(LV_SS), "\n")
+cat("Remaining unique IDs:", n_distinct(LV_SS$ID), "\n")
 
 
 # PHOTO QUALITY RATING-------
@@ -169,6 +251,54 @@ LV_SS <- LV_SS %>%
 cat("\n=== LOCATION ===\n")
 print(table(LV_SS$Location, useNA = "ifany"))
 
+# Check for photos with unknown location
+unknown_location <- LV_SS %>%
+  filter(Location == "??")
+
+if (nrow(unknown_location) > 0) {
+  unknown_location_summary <- unknown_location %>%
+    group_by(ID, ID_original) %>%
+    summarise(
+      N_Photos = n(),
+      Has_Lat = sum(!is.na(Latitude)),
+      Has_Long = sum(!is.na(Longitude)),
+      Sample_Lat = first(Latitude[!is.na(Latitude)], default = NA_real_),
+      Sample_Long = first(Longitude[!is.na(Longitude)], default = NA_real_),
+      Sample_Keywords = paste(head(unique(keyword), 2), collapse = " | "),
+      .groups = "drop"
+    )
+  
+  # Calculate dates separately for IDs that have valid dates
+  unknown_location_dates <- unknown_location %>%
+    filter(!is.na(Date)) %>%
+    group_by(ID, ID_original) %>%
+    summarise(
+      First_Date = min(Date),
+      Last_Date = max(Date),
+      .groups = "drop"
+    )
+  
+  # Merge back
+  unknown_location_summary <- unknown_location_summary %>%
+    left_join(unknown_location_dates, by = c("ID", "ID_original")) %>%
+    arrange(desc(N_Photos))
+  
+  cat("\n⚠ WARNING: Found", nrow(unknown_location_summary), "IDs with photos missing location assignment\n")
+  cat("Total photos with location '??':", sum(unknown_location_summary$N_Photos), "\n\n")
+  
+  # Show summary
+  print(head(unknown_location_summary, 20))
+  
+  if (nrow(unknown_location_summary) > 20) {
+    cat("\n... (showing first 20 of", nrow(unknown_location_summary), "IDs)\n")
+  }
+  
+  # Export for review
+  write_csv(unknown_location_summary, here("OUTPUT/photos_with_unknown_location.csv"))
+  cat("\nExported full list: OUTPUT/photos_with_unknown_location.csv\n")
+  cat("\nNote: These photos remain in the dataset but may need manual location assignment.\n")
+}
+
 
 # SEX DETERMINATION-------
 # Extract sex from keywords (Male/Female) - could be genetic or morphological
@@ -176,8 +306,9 @@ print(table(LV_SS$Location, useNA = "ifany"))
 LV_SS <- LV_SS %>%
   mutate(
     Sex = case_when(
-      grepl("FemaleJ,|F,|FJ", keyword) ~ "FemaleJ",
-      grepl("Male,|M,|MM,", keyword) ~ "MaleM",
+      grepl("Melon_F,|biopsy-Female", keyword) ~ "FemaleJ",
+      grepl("Melon_M,|biopsy-Male", keyword) ~ "MaleM",
+      grepl("Melon_UNK", keyword) ~ "UNK",
       TRUE ~ NA_character_
     )
   )
@@ -192,13 +323,59 @@ LV_SS <- LV_SS %>%
     )
   )
 
-cat("\n=== SEX DETERMINATION (BEFORE PROPAGATION) ===\n")
-cat("Photos with Sex info:", sum(!is.na(LV_SS$Sex)), "\n")
+cat("\n=== SEX DETERMINATION (BEFORE QA) ===\n")
+cat("Photos with any Sex info:", sum(!is.na(LV_SS$Sex)), "\n")
 cat("Photos with Melon_Sex info:", sum(LV_SS$Melon_Sex != "UNK"), "\n")
 cat("\nSex distribution:\n")
 print(table(LV_SS$Sex, useNA = "ifany"))
 cat("\nMelon_Sex distribution:\n")
 print(table(LV_SS$Melon_Sex, useNA = "ifany"))
+
+# Check for unknown or missing sex assignments
+unk_sex <- LV_SS %>% filter(Sex == "UNK")
+na_sex <- LV_SS %>% filter(is.na(Sex))
+
+cat("\nPhotos with Sex = 'UNK':", nrow(unk_sex), "\n")
+cat("Photos with Sex = NA:", nrow(na_sex), "\n")
+
+# Extract sex from genetics
+LV_SS <- LV_SS %>%
+  mutate(
+    Genetic_Sex = case_when(
+      grepl("FemaleJ", Sex) & grepl("biopsy", keyword) ~ "Female",
+      grepl("MaleM", Sex) & grepl("biopsy", keyword) ~ "Male",
+      TRUE ~ NA_character_
+    )
+  )
+
+cat("\nGenetic_Sex distribution:\n")
+print(table(LV_SS$Genetic_Sex, useNA = "ifany"))
+cat("IDs with genetic sex:", n_distinct(LV_SS$ID[!is.na(LV_SS$Genetic_Sex)]), "\n")
+
+# Check for mismatch: IDs with biopsy but no genetic sex
+ids_with_biopsy <- unique(LV_SS$ID[!is.na(LV_SS$Biopsy)])
+ids_with_genetic_sex <- unique(LV_SS$ID[!is.na(LV_SS$Genetic_Sex)])
+
+ids_biopsy_but_no_sex <- setdiff(ids_with_biopsy, ids_with_genetic_sex)
+
+if (length(ids_biopsy_but_no_sex) > 0) {
+  cat("\n⚠ WARNING:", length(ids_biopsy_but_no_sex), "IDs have biopsy keyword but no Genetic_Sex\n")
+  cat("These IDs:", paste(ids_biopsy_but_no_sex, collapse = ", "), "\n")
+  
+  # Show why they don't have genetic sex
+  biopsy_no_sex_check <- LV_SS %>%
+    filter(ID %in% ids_biopsy_but_no_sex, !is.na(Biopsy)) %>%
+    select(ID, Sex, Melon_Sex, Biopsy, keyword) %>%
+    group_by(ID, Sex, Melon_Sex) %>%
+    summarise(
+      N_Photos = n(),
+      Sample_Keyword = first(keyword),
+      .groups = "drop"
+    )
+  
+  cat("\nReason: These IDs have biopsy but Sex is not FemaleJ/MaleM:\n")
+  print(biopsy_no_sex_check)
+}
 
 
 # SAVE BASE CLEAN DATA-------

@@ -22,6 +22,13 @@ cat("Starting finalization process...\n\n")
 
 
 # APPLY ANY MANUAL CORRECTIONS-------
+
+#2025 v1 issues:
+# FOR NOW Correct Sex - determined to be MaleM,  photos were UNK or due to ID merges
+LV_SS <- LV_SS %>%
+  mutate(Sex = if_else(ID == "5908" & Sex == "FemaleJ", "MaleM", Sex))%>%
+  mutate(Sex = if_else(ID == "6439" & Sex == "FemaleJ", "MaleM", Sex))
+
 # Add any corrections identified during QA review here
 
 # Check for sex conflicts that need resolution
@@ -31,19 +38,19 @@ sex_conflicts_check <- LV_SS %>%
   summarise(N_Sex_Categories = n_distinct(Sex), .groups = "drop") %>%
   filter(N_Sex_Categories > 1)
 
-# if (nrow(sex_conflicts_check) > 0) {
-#   cat("\n⚠⚠⚠ WARNING: Found", nrow(sex_conflicts_check), 
-#       "IDs with conflicting sex assignments!\n")
-#   cat("Conflicting IDs:", paste(sex_conflicts_check$ID, collapse = ", "), "\n")
-#   cat("\nThese IDs should be corrected before propagation.\n")
-#   cat("Add corrections here based on QA review from Script 02.\n\n")
-#   cat("Example corrections:\n")
-#   cat("# Correct ID 5908 to FemaleJ (MaleM photos were misidentifications)\n")
-#   cat("# LV_SS <- LV_SS %>%\n")
-#   cat("#   mutate(Sex = if_else(ID == '5908' & Sex == 'MaleM', NA_character_, Sex))\n\n")
-#   
-#   stop("PROPAGATION HALTED: Resolve sex conflicts before continuing.")
-# }
+if (nrow(sex_conflicts_check) > 0) {
+  cat("\n⚠⚠⚠ WARNING: Found", nrow(sex_conflicts_check), 
+      "IDs with conflicting sex assignments!\n")
+  cat("Conflicting IDs:", paste(sex_conflicts_check$ID, collapse = ", "), "\n")
+  cat("\nThese IDs should be corrected before propagation.\n")
+  cat("Add corrections here based on QA review from Script 02.\n\n")
+  cat("Example corrections:\n")
+  cat("# Correct ID 5908 to FemaleJ (MaleM photos were misidentifications)\n")
+  cat("# LV_SS <- LV_SS %>%\n")
+  cat("#   mutate(Sex = if_else(ID == '5908' & Sex == 'MaleM', NA_character_, Sex))\n\n")
+  
+  stop("PROPAGATION HALTED: Resolve sex conflicts before continuing.")
+}
 
 # Example corrections (uncomment and modify as needed):
 # LV_SS <- LV_SS %>%
@@ -122,47 +129,51 @@ cat("Unique ID-side combinations:", n_distinct(LV_SS$ID.side), "\n")
 # CALCULATE SIGHTING HISTORY-------
 cat("\n=== CALCULATING SIGHTING HISTORY ===\n")
 
-# Calculate first and last sighting dates for each individual
-Id_Year <- LV_SS %>% 
-  group_by(ID, side) %>%
-  mutate(
+# Calculate first and last sighting dates for each ID.side combination, Animal Years is inclusive of first sighting year
+Id_Year_summary <- LV_SS %>% 
+  group_by(ID, ID.side) %>%
+  summarise(
     FirstDate = min(Date), 
     LastDate = max(Date),
     YEAR1 = as.numeric(format(FirstDate, "%Y")),
-    YEARLAST = as.numeric(format(LastDate, "%Y"))
+    YEARLAST = as.numeric(format(LastDate, "%Y")),
+    ANIMAL_YRS = as.numeric(format(LastDate, "%Y")) - as.numeric(format(FirstDate, "%Y")) +1,
+    .groups = "drop"
   )
-
-# Create individual-level summary
-Id_Year_summary <- as.data.frame(
-  Id_Year %>% 
-    ungroup() %>%
-    select(ID, ID.side, side, Melon_Sex, Sex_genetic, 
-           QRATE, Reliable, keyword, YEAR1, YEARLAST) %>%
-    unique()
-)
-
-# Calculate sighting span (animal years in catalogue)
-Id_Year_summary <- Id_Year_summary %>%
-  mutate(ANIMAL_YRS = YEARLAST - YEAR1)
 
 # Merge sighting span back to main dataset
 LV_SS <- left_join(LV_SS, 
                    Id_Year_summary %>% select(ID, ID.side, ANIMAL_YRS),
-                   by = c("ID", "ID.side"))
+                   by = c("ID", "ID.side"),
+                   relationship = "many-to-one")
 
 cat("Sighting history calculated\n")
+cat("Unique ID-side combinations:", nrow(Id_Year_summary), "\n")
 
 
-# CREATE MASTER ID SUMMARY TABLE-------
-cat("\n=== CREATING MASTER ID SUMMARY ===\n")
+# CREATE PRIMARY ID SUMMARY TABLE-------
+cat("\n=== CREATING PRIMARY ID SUMMARY ===\n")
 
-Id_Year2 <- Id_Year_summary %>%
-  group_by(ID, ID.side, Melon_Sex, Sex_genetic, YEAR1, YEARLAST, ANIMAL_YRS) %>%
-  summarise(N_Photos = n(), .groups = "drop") %>%
+# Expand Id_Year_summary with additional metadata from first photo of each ID.side
+Id_Year_summary_full <- LV_SS %>%
+  arrange(ID, ID.side, Date) %>%
+  group_by(ID, ID.side) %>%
+  slice(1) %>%
+  select(ID, ID.side, side, Melon_Sex, Sex_genetic) %>%
+  left_join(Id_Year_summary, by = c("ID", "ID.side")) %>%
   mutate(ID_numeric = as.numeric(ID)) %>%
+  arrange(ID_numeric)%>%
+  ungroup()
+
+# Create final summary with photo counts
+Id_Year_photos <- LV_SS %>%
+  group_by(ID, ID.side) %>%
+  summarise(N_Photos = n(), .groups = "drop") %>%
+  left_join(Id_Year_summary_full, by = c("ID", "ID.side")) %>%
+  select(ID_numeric, ID.side, Melon_Sex, Sex_genetic, YEAR1, YEARLAST, ANIMAL_YRS, N_Photos) %>%
   arrange(ID_numeric)
 
-cat("Master ID table created:", nrow(Id_Year2), "unique ID-side combinations\n")
+cat("Primary ID table created:", nrow(Id_Year2), "unique ID-side combinations\n")
 
 
 # EXTRACT CATALOGUE YEARS-------
@@ -186,15 +197,11 @@ cat("\n=== EXPORTING FINAL DATASETS ===\n")
 
 output_path <- "OUTPUT/"
 
-# 1. Master ID-sex table
-write_csv(Id_Year2, paste0(output_path, "ID_SEX_MASTER_", version, ".csv"))
-cat("✓ Exported: ID_SEX_MASTER_", version, ".csv\n")
+# 1. Primary ID-sex table with ANIMAL YEARS
+write_csv(Id_Year_photos, paste0(output_path, "ID_SEX_PRIMARY_YRS", version, ".csv"))
+cat("✓ Exported: ID_SEX_PRIMARY_", version, ".csv\n")
 
-# 2. Catalogue years
-write_csv(cat_years, paste0(output_path, "cat_yrs_", version, ".csv"))
-cat("✓ Exported: cat_yrs_", version, ".csv\n")
-
-# 3. SOCPROG format (for social network analysis)
+# 2. SOCPROG format (for social network analysis)
 SOCPROGNBW <- LV_SS %>%
   select(QRATE, Date, Date.Original, Location, Latitude, Longitude,
          side, Reliable, Sex, ID)
@@ -204,7 +211,7 @@ write.csv(SOCPROGNBW,
           row.names = FALSE)
 cat("✓ Exported: SOCPROGNBW_", version, ".csv\n")
 
-# 4. SOCPROG supplementary data
+# 3. SOCPROG supplementary data
 SOCPROG_SUPDATA <- LV_SS %>% 
   group_by(ID, YEAR) %>% 
   mutate(Year_rel = if_else(Reliable == "Yes", min(YEAR), 9999)) %>%
@@ -229,7 +236,7 @@ write.csv(SOCPROG_SUPDATA,
           row.names = FALSE)
 cat("✓ Exported: SOCPROG_SUPDATA_", version, ".csv\n")
 
-# 5. Simplified version
+# 4. Simplified version
 write_csv(LV_SS_simple, 
           paste0(output_path, "LV_SS_simple_", version, ".csv"))
 cat("✓ Exported: LV_SS_simple_", version, ".csv\n")

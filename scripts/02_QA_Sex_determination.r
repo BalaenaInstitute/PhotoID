@@ -23,12 +23,13 @@ cat("Date range:", format(min(LV_SS$Date), "%Y-%m-%d"), "to",
     format(max(LV_SS$Date), "%Y-%m-%d"), "\n\n")
 
 # SEX DETERMINATION-------
-# Extract sex from melon morphology keywords (Male/Female-Juvenile)
+# Extract sex from keywords (Male/Female) - could be genetic or morphological
 LV_SS <- LV_SS %>%
   mutate(
     Sex = case_when(
-      grepl("FemaleJ,|F,|FJ", keyword) ~ "FemaleJ",
-      grepl("Male,|M,|MM,", keyword) ~ "MaleM",
+      grepl("Melon_F,|biopsy-Female", keyword) ~ "FemaleJ",
+      grepl("Melon_M,|biopsy-Male", keyword) ~ "MaleM",
+      grepl("Melon_UNK", keyword) ~ "UNK",
       TRUE ~ NA_character_
     )
   )
@@ -43,11 +44,63 @@ LV_SS <- LV_SS %>%
     )
   )
 
-summary(as.factor(LV_SS$Sex))
-summary(as.factor(LV_SS$Melon_Sex))
+cat("\n=== SEX DETERMINATION (BEFORE QA) ===\n")
+cat("Photos with any Sex info:", sum(!is.na(LV_SS$Sex)), "\n")
+cat("Photos with Melon_Sex info:", sum(LV_SS$Melon_Sex != "UNK"), "\n")
+cat("\nSex distribution:\n")
+print(table(LV_SS$Sex, useNA = "ifany"))
+cat("\nMelon_Sex distribution:\n")
+print(table(LV_SS$Melon_Sex, useNA = "ifany"))
 
 # Check for unknown or missing sex assignments
-unk_sex <- LV_SS %>% filter(Melon_Sex == "UNK")
+unk_sex <- LV_SS %>% filter(Sex == "UNK")
+na_sex <- LV_SS %>% filter(is.na(Sex))
+
+cat("\nPhotos with Sex = 'UNK':", nrow(unk_sex), "\n")
+cat("Photos with Sex = NA:", nrow(na_sex), "\n\n")
+
+# Extract sex from genetics
+LV_SS <- LV_SS %>%
+  mutate(
+    Genetic_Sex = case_when(
+      grepl("FemaleJ", Sex) & grepl("biopsy", keyword) ~ "Female",
+      grepl("MaleM", Sex) & grepl("biopsy", keyword) ~ "Male",
+      TRUE ~ NA_character_
+    )
+  )
+
+cat("\nGenetic_Sex distribution:\n")
+print(table(LV_SS$Genetic_Sex, useNA = "ifany"))
+cat("IDs with genetic sex:", n_distinct(LV_SS$ID[!is.na(LV_SS$Genetic_Sex)]), "\n\n")
+
+# Check for mismatch: IDs with biopsy but no genetic sex
+ids_with_biopsy <- unique(LV_SS$ID[!is.na(LV_SS$Biopsy)])
+ids_with_genetic_sex <- unique(LV_SS$ID[!is.na(LV_SS$Genetic_Sex)])
+
+ids_biopsy_but_no_sex <- setdiff(ids_with_biopsy, ids_with_genetic_sex)
+
+if (length(ids_biopsy_but_no_sex) > 0) {
+  cat("\n⚠ WARNING:", length(ids_biopsy_but_no_sex), "IDs have biopsy keyword but no Genetic_Sex\n")
+  cat("These IDs:", paste(ids_biopsy_but_no_sex, collapse = ", "), "\n")
+  
+  # Show why they don't have genetic sex
+  biopsy_no_sex_check <- LV_SS %>%
+    filter(ID %in% ids_biopsy_but_no_sex, !is.na(Biopsy)) %>%
+    select(ID, Sex, Melon_Sex, Biopsy, keyword) %>%
+    group_by(ID, Sex, Melon_Sex) %>%
+    summarise(
+      N_Photos = n(),
+      Sample_Keyword = first(keyword),
+      .groups = "drop"
+    )
+  
+  cat("\nReason: These IDs have biopsy but Sex is not FemaleJ/MaleM:\n")
+  print(biopsy_no_sex_check)
+  
+  cat("\nThis likely means:\n")
+  cat("- Biopsy was collected but results not yet entered in keywords, OR\n")
+  cat("- Sex keyword uses different format (check Sample_Keyword above)\n\n")
+}
 na_sex <- LV_SS %>% filter(is.na(Sex))
 
 
@@ -68,13 +121,51 @@ sex_conflicts_by_id <- LV_SS %>%
     N_Photos_Total = n(),
     N_FemaleJ = sum(Sex == "FemaleJ"),
     N_MaleM = sum(Sex == "MaleM"),
-    First_Date = min(Date),
-    Last_Date = max(Date),
-    Date_Range_Years = as.numeric(difftime(max(Date), min(Date), units = "days")) / 365.25,
+    Biopsied = if_else(any(!is.na(Biopsy)), "YES", "NO"),
     .groups = "drop"
   ) %>%
-  filter(N_Sex_Categories > 1) %>%
-  arrange(desc(N_Photos_Total))
+  filter(N_Sex_Categories > 1)
+
+# Calculate dates separately for each sex category (only for conflicting IDs)
+if (nrow(sex_conflicts_by_id) > 0) {
+  # FemaleJ dates
+  femalej_dates <- LV_SS %>%
+    filter(ID %in% sex_conflicts_by_id$ID, Sex == "FemaleJ", !is.na(Date)) %>%
+    group_by(ID) %>%
+    summarise(
+      First_FemaleJ_Date = min(Date),
+      Last_FemaleJ_Date = max(Date),
+      .groups = "drop"
+    )
+  
+  # MaleM dates
+  malem_dates <- LV_SS %>%
+    filter(ID %in% sex_conflicts_by_id$ID, Sex == "MaleM", !is.na(Date)) %>%
+    group_by(ID) %>%
+    summarise(
+      First_MaleM_Date = min(Date),
+      Last_MaleM_Date = max(Date),
+      .groups = "drop"
+    )
+  
+  # Overall dates
+  overall_dates <- LV_SS %>%
+    filter(ID %in% sex_conflicts_by_id$ID, !is.na(Date)) %>%
+    group_by(ID) %>%
+    summarise(
+      First_Date = min(Date),
+      Last_Date = max(Date),
+      Date_Range_Years = as.numeric(difftime(max(Date), min(Date), units = "days")) / 365.25,
+      .groups = "drop"
+    )
+  
+  # Merge all dates back
+  sex_conflicts_by_id <- sex_conflicts_by_id %>%
+    left_join(femalej_dates, by = "ID") %>%
+    left_join(malem_dates, by = "ID") %>%
+    left_join(overall_dates, by = "ID") %>%
+    arrange(desc(N_Photos_Total))
+}
 
 if (nrow(sex_conflicts_by_id) > 0) {
   cat("\n⚠⚠⚠ CRITICAL: Found", nrow(sex_conflicts_by_id), "IDs with CONFLICTING sex determinations!\n")
@@ -83,21 +174,11 @@ if (nrow(sex_conflicts_by_id) > 0) {
   
   print(sex_conflicts_by_id)
   
-  # Get detailed photo-by-photo view of conflicts
+  # Get detailed photo-by-photo view of conflicts for export
   conflict_details <- LV_SS %>%
     filter(ID %in% sex_conflicts_by_id$ID) %>%
     arrange(ID, Date) %>%
-    select(ID, Date, YEAR, Sex, Melon_Sex, Biopsy, keyword, QRATE, Reliable) %>%
-    mutate(Row = row_number())
-  
-  cat("\n=== Detailed timeline for conflicting IDs ===\n")
-  cat("Showing all photos to help identify which sex is correct:\n\n")
-  
-  # Show grouped by ID
-  for (id in sex_conflicts_by_id$ID) {
-    cat("\n--- ID:", id, "---\n")
-    print(conflict_details %>% filter(ID == id) %>% select(-ID))
-  }
+    select(ID, Date, YEAR, Sex, Melon_Sex, Biopsy, keyword, QRATE, Reliable)
   
   # Export for manual review
   write_csv(sex_conflicts_by_id, 
@@ -105,19 +186,10 @@ if (nrow(sex_conflicts_by_id) > 0) {
   write_csv(conflict_details, 
             paste0("OUTPUT/SEX_CONFLICTS_DETAILED_", version, ".csv"))
   
-  cat("\n=== EXPORTED CONFLICT FILES ===\n")
-  cat("1. SEX_CONFLICTS_DO_NOT_PROPAGATE_", version, ".csv (summary)\n")
-  cat("2. SEX_CONFLICTS_DETAILED_", version, ".csv (photo-by-photo)\n\n")
+  cat("\n=== EXPORTED: SEX_CONFLICTS_DO_NOT_PROPAGATE_", version, ".csv ===\n")
+  cat("=== EXPORTED: SEX_CONFLICTS_DETAILED_", version, ".csv ===\n\n")
   
-  cat("⚠ ACTION REQUIRED:\n")
-  cat("Review these files and determine correct sex for each conflicting ID.\n")
-  cat("Options:\n")
-  cat("  1. Keep FemaleJ if MaleM photos are errors/misidentifications\n")
-  cat("  2. Keep MaleM if FemaleJ photos are errors/misidentifications\n")
-  cat("  3. Split into separate IDs if this is actually two different whales\n")
-  cat("  4. Mark as UNK if unable to determine\n\n")
-  
-  cat("Once resolved, add corrections to Script 03 (03_finalize_LV_SS_and_export.R)\n")
+  cat("⚠ ACTION REQUIRED: Review conflicts and add corrections to Script 03\n")
   cat("in the 'APPLY MANUAL CORRECTIONS' section.\n\n")
   
 } else {
@@ -185,30 +257,7 @@ id_sex_history <- LV_SS %>%
     )
   )
 
-# 4. Identify IDs where sex was determined after first sighting
-ids_later_sexed <- id_sex_history %>%
-  filter(!is.na(Years_Before_Sex_Known), Years_Before_Sex_Known > 0) %>%
-  arrange(desc(Years_Before_Sex_Known))
-
-cat("\n=== IDs with sex determined AFTER first sighting ===\n")
-cat("Total IDs:", nrow(ids_later_sexed), "\n\n")
-
-if (nrow(ids_later_sexed) > 0) {
-  print(ids_later_sexed %>%
-          select(ID, Sex_Determined, First_Sighting, First_Sex_Determination, 
-                 Years_Before_Sex_Known, Total_Photos, Photos_With_Sex))
-  
-  # Summary statistics
-  cat("\n=== SUMMARY STATISTICS ===\n")
-  cat("Median years before sex known:", 
-      round(median(ids_later_sexed$Years_Before_Sex_Known, na.rm = TRUE), 1), "\n")
-  cat("Mean years before sex known:", 
-      round(mean(ids_later_sexed$Years_Before_Sex_Known, na.rm = TRUE), 1), "\n")
-  cat("Max years before sex known:", 
-      round(max(ids_later_sexed$Years_Before_Sex_Known, na.rm = TRUE), 1), "\n")
-}
-
-# 5. IDs that currently have NO sex information
+# 4. IDs that currently have NO sex information
 ids_never_sexed <- id_sex_history %>%
   filter(Photos_With_Sex == 0) %>%
   arrange(desc(Total_Photos))
@@ -239,41 +288,15 @@ sex_comparison <- LV_SS %>%
 cat("\n=== Sex vs Melon_Sex Comparison ===\n")
 print(sex_comparison)
 
-# 7. Create detailed timeline for IDs with interesting patterns
-interesting_ids <- ids_later_sexed %>%
-  filter(Years_Before_Sex_Known > 5) %>%  # IDs with 5+ years gap
-  pull(ID)
-
-if (length(interesting_ids) > 0) {
-  cat("\n=== Detailed timeline for IDs with 5+ year gap ===\n")
-  
-  detailed_timeline <- LV_SS %>%
-    filter(ID %in% interesting_ids) %>%
-    arrange(ID, Date) %>%
-    select(ID, Date, YEAR, Sex, Melon_Sex, Reliable, QRATE, keyword) %>%
-    group_by(ID) %>%
-    mutate(Photo_Number = row_number()) %>%
-    ungroup()
-  
-  # Export detailed timeline for review
-  write_csv(detailed_timeline, 
-            paste0("OUTPUT/sex_determination_timeline_detailed_", version, ".csv"))
-  cat("Exported detailed timeline to: OUTPUT/sex_determination_timeline_detailed_", 
-      version, ".csv\n")
-}
-
-# 8. Export summary tables
+# Export summary tables
 write_csv(id_sex_history, 
           paste0("OUTPUT/sex_determination_summary_", version, ".csv"))
-write_csv(ids_later_sexed, 
-          paste0("OUTPUT/ids_with_delayed_sex_determination_", version, ".csv"))
 write_csv(ids_never_sexed, 
           paste0("OUTPUT/ids_without_sex_info_", version, ".csv"))
 
 cat("\n=== Files exported ===\n")
 cat("1. sex_determination_summary_", version, ".csv\n")
-cat("2. ids_with_delayed_sex_determination_", version, ".csv\n")
-cat("3. ids_without_sex_info_", version, ".csv\n")
+cat("2. ids_without_sex_info_", version, ".csv\n")
 
 
 # PROCEED WITH SEX PROPAGATION-------
@@ -290,15 +313,16 @@ if (exists("sex_conflicts_by_id") && nrow(sex_conflicts_by_id) > 0) {
   cat("These IDs are analyzed below but should NOT have sex propagated in Script 03.\n\n")
 }
 
-# 1. Identify records with Sex but no Melon_Sex
+# 1. Identify records with Sex (FemaleJ/MaleM) but no Melon_Sex
 sex_without_melon <- LV_SS %>%
   filter(
-    !is.na(Sex),           # Has Sex assignment
-    Melon_Sex == "UNK"     # No Melon_Sex assignment
+    Sex %in% c("FemaleJ", "MaleM"),  # Has actual sex assignment (not UNK)
+    Melon_Sex == "UNK"                # No Melon_Sex assignment
   ) %>%
-  select(ID, Date, YEAR, Sex, Melon_Sex, Biopsy, keyword, QRATE, Reliable)
+  select(ID, Date, YEAR, Sex, Melon_Sex, Biopsy, Genetic_Sex, keyword, QRATE, Reliable)
 
-cat("\n=== Records with Sex but no Melon_Sex ===\n")
+cat("\n=== Records with Sex (FemaleJ/MaleM) but no Melon_Sex ===\n")
+cat("(These should be biopsied IDs with genetic sex only)\n")
 cat("Total photos:", nrow(sex_without_melon), "\n")
 cat("Unique IDs:", n_distinct(sex_without_melon$ID), "\n")
 
@@ -308,8 +332,14 @@ sex_without_melon_by_id <- sex_without_melon %>%
   summarise(
     N_Photos = n(),
     Has_Biopsy = any(!is.na(Biopsy)),
-    First_Date = min(Date),
-    Last_Date = max(Date),
+    First_Date = case_when(
+      all(is.na(Date)) ~ as.Date(NA),
+      TRUE ~ min(Date, na.rm = TRUE)
+    ),
+    Last_Date = case_when(
+      all(is.na(Date)) ~ as.Date(NA),
+      TRUE ~ max(Date, na.rm = TRUE)
+    ),
     .groups = "drop"
   ) %>%
   arrange(desc(N_Photos))
@@ -352,9 +382,10 @@ biopsy_year_table <- LV_SS %>%
     Sex = first(Sex[!is.na(Sex)], default = NA_character_),
     .groups = "drop"
   ) %>%
-  arrange(First_Biopsy_Year, ID)
+  arrange(ID)  # Sort by ID for easy lookup
 
 cat("\n=== Year Biopsy Keyword Added for Each ID ===\n")
+cat("(Sorted by ID for easy reference)\n")
 print(biopsy_year_table)
 
 # Export biopsy timeline table
@@ -362,61 +393,48 @@ write_csv(biopsy_year_table,
           paste0("OUTPUT/biopsy_year_by_id_", version, ".csv"))
 cat("\nExported: OUTPUT/biopsy_year_by_id_", version, ".csv\n")
 
-# Summary by year
-biopsy_by_year <- biopsy_year_table %>%
-  group_by(First_Biopsy_Year) %>%
-  summarise(
-    N_IDs_Biopsied = n(),
-    IDs = paste(ID, collapse = ", "),
-    .groups = "drop"
-  )
-
-cat("\n=== Biopsies by Year ===\n")
-print(biopsy_by_year)
-
 cat("\n=== COMPARISON: Sex without Melon vs Biopsied IDs ===\n")
 cat("Total biopsied IDs:", length(all_biopsied_ids), "\n")
 cat("IDs with Sex but no Melon_Sex:", length(ids_sex_no_melon), "\n")
 
-# Check if they match
-ids_match <- setequal(all_biopsied_ids, ids_sex_no_melon)
-cat("Do they match exactly?", ids_match, "\n")
+# Check overlaps
+biopsied_AND_no_melon <- intersect(all_biopsied_ids, ids_sex_no_melon)
+cat("IDs that are BOTH biopsied AND have no Melon_Sex:", length(biopsied_AND_no_melon), 
+    "(expected - genetic sex only)\n")
 
-# 5. Find discrepancies
-if (!ids_match) {
-  # IDs with Sex but no Melon_Sex that are NOT biopsied
-  sex_no_melon_not_biopsied <- setdiff(ids_sex_no_melon, all_biopsied_ids)
+# Find problematic cases
+sex_no_melon_not_biopsied <- setdiff(ids_sex_no_melon, all_biopsied_ids)
+biopsied_with_melon <- setdiff(all_biopsied_ids, ids_sex_no_melon)
+
+# Report problematic: Sex but no Melon_Sex that are NOT biopsied
+if (length(sex_no_melon_not_biopsied) > 0) {
+  cat("\n⚠ PROBLEM: IDs with Sex but no Melon_Sex that are NOT biopsied:\n")
+  cat("Count:", length(sex_no_melon_not_biopsied), "\n")
+  cat("IDs:", paste(sex_no_melon_not_biopsied, collapse = ", "), "\n")
+  cat("(These should have either melon sex or biopsy - check keywords)\n\n")
   
-  if (length(sex_no_melon_not_biopsied) > 0) {
-    cat("\n⚠ IDs with Sex but no Melon_Sex that are NOT biopsied:\n")
-    cat("Count:", length(sex_no_melon_not_biopsied), "\n")
-    cat("IDs:", paste(sex_no_melon_not_biopsied, collapse = ", "), "\n\n")
-    
-    # Get details for these IDs
-    problematic_ids <- LV_SS %>%
-      filter(ID %in% sex_no_melon_not_biopsied) %>%
-      group_by(ID) %>%
-      summarise(
-        Sex = first(Sex[!is.na(Sex)]),
-        N_Photos = n(),
-        N_With_Sex = sum(!is.na(Sex)),
-        N_With_Melon = sum(Melon_Sex != "UNK"),
-        Keywords_Sample = paste(head(unique(keyword), 2), collapse = " | "),
-        .groups = "drop"
-      )
-    
-    cat("Details for problematic IDs:\n")
-    print(problematic_ids)
-  }
+  # Get details for these problematic IDs
+  problematic_ids <- LV_SS %>%
+    filter(ID %in% sex_no_melon_not_biopsied) %>%
+    group_by(ID) %>%
+    summarise(
+      Sex = first(Sex[Sex %in% c("FemaleJ", "MaleM")]),
+      N_Photos = n(),
+      Keywords_Sample = paste(head(unique(keyword), 1), collapse = ""),
+      .groups = "drop"
+    )
   
-  # Biopsied IDs that DO have Melon_Sex
-  biopsied_with_melon <- setdiff(all_biopsied_ids, ids_sex_no_melon)
-  
-  if (length(biopsied_with_melon) > 0) {
-    cat("\n✓ Biopsied IDs that ALSO have Melon_Sex:\n")
-    cat("Count:", length(biopsied_with_melon), "\n")
-    cat("Sample IDs:", paste(head(biopsied_with_melon, 10), collapse = ", "), 
-        if(length(biopsied_with_melon) > 10) "..." else "", "\n")
+  print(problematic_ids)
+}
+
+# Report good case: Biopsied IDs that ALSO have Melon_Sex (both methods available)
+if (length(biopsied_with_melon) > 0) {
+  cat("\n✓ Biopsied IDs that ALSO have Melon_Sex (both genetic & morphological):\n")
+  cat("Count:", length(biopsied_with_melon), "\n")
+  if (length(biopsied_with_melon) <= 20) {
+    cat("IDs:", paste(biopsied_with_melon, collapse = ", "), "\n")
+  } else {
+    cat("Sample IDs:", paste(head(biopsied_with_melon, 20), collapse = ", "), "...\n")
   }
 }
 
@@ -454,93 +472,8 @@ if (nrow(biopsy_check) > 0) {
 }
 
 cat("\n========================================\n")
-cat("PROCEEDING WITH SEX PROPAGATION\n")
-cat("========================================\n\n")
-
-# Summarize sex by individual (before propagation)
-sex_sum_before <- LV_SS %>% 
-  group_by(ID, Sex) %>% 
-  summarise(N = n(), .groups = "drop") %>% 
-  na.omit()
-
-cat("\n=== Before propagation ===\n")
-cat("Records with sex info:", sum(sex_sum_before$N), "\n")
-cat("Records without sex info:", sum(is.na(LV_SS$Sex)), "\n")
-
-# Propagate sex information across all photos of same individual
-LV_SS <- LV_SS %>%
-  arrange(Date) %>%
-  group_by(ID) %>%
-  fill(Sex, .direction = "downup") %>%
-  mutate(Sex = if_else(is.na(Sex), "UNK", Sex)) %>%
-  ungroup()
-
-# Summary after propagation
-sex_sum_after <- LV_SS %>% 
-  group_by(Sex) %>% 
-  summarise(N = n(), .groups = "drop")
-
-cat("\n=== After propagation ===\n")
-print(sex_sum_after)
-
-# Calculate how many records gained sex info through propagation
-# Track which records originally had sex info (before propagation)
-records_before_after <- LV_SS %>%
-  mutate(
-    Originally_Had_Sex = case_when(
-      grepl("FemaleJ,|F,|FJ", keyword) ~ TRUE,
-      grepl("Male,|M,|MM,", keyword) ~ TRUE,
-      TRUE ~ FALSE
-    ),
-    Has_Sex_After_Propagation = Sex %in% c("FemaleJ", "MaleM")
-  )
-
-# Photos that gained sex through propagation
-photos_gained_sex <- records_before_after %>%
-  filter(!Originally_Had_Sex & Has_Sex_After_Propagation) %>%
-  select(ID, Date, YEAR, Sex, keyword, QRATE, Reliable, Location) %>%
-  arrange(ID, Date)
-
-# IDs with photos that gained sex through propagation
-ids_gained_sex <- records_before_after %>%
-  group_by(ID) %>%
-  summarise(
-    Total_Photos = n(),
-    Photos_Originally_With_Sex = sum(Originally_Had_Sex),
-    Photos_Originally_Without_Sex = sum(!Originally_Had_Sex),
-    Photos_Gained_Sex = sum(!Originally_Had_Sex & Has_Sex_After_Propagation),
-    Current_Sex = first(Sex[Sex != "UNK"], default = "UNK"),
-    .groups = "drop"
-  ) %>%
-  filter(Photos_Gained_Sex > 0) %>%
-  arrange(desc(Photos_Gained_Sex))
-
-cat("\n=== Propagation impact - DETAILED ===\n")
-cat("Total PHOTOS that gained sex info through propagation:", nrow(photos_gained_sex), "\n")
-cat("Total IDs with at least one photo gaining sex info:", nrow(ids_gained_sex), "\n\n")
-
-if (nrow(ids_gained_sex) > 0) {
-  cat("IDs that had photos gain sex through propagation:\n")
-  print(ids_gained_sex %>% 
-          select(ID, Current_Sex, Total_Photos, 
-                 Photos_Originally_With_Sex, Photos_Gained_Sex))
-  
-  # Export detailed lists
-  write_csv(ids_gained_sex, 
-            paste0("OUTPUT/ids_with_propagated_sex_", version, ".csv"))
-  write_csv(photos_gained_sex, 
-            paste0("OUTPUT/photos_with_propagated_sex_", version, ".csv"))
-  
-  cat("\n=== Files exported ===\n")
-  cat("- ids_with_propagated_sex_", version, ".csv (", nrow(ids_gained_sex), " IDs)\n")
-  cat("- photos_with_propagated_sex_", version, ".csv (", nrow(photos_gained_sex), " photos)\n")
-}
-
-cat("\n=== Overall propagation summary ===\n")
-cat("PHOTOS that gained sex info:", nrow(photos_gained_sex), "\n")
-cat("IDs affected:", nrow(ids_gained_sex), "\n")
-cat("PHOTOS still without sex (UNK):", sum(LV_SS$Sex == "UNK"), "\n")
-cat("IDs still without sex:", sum(records_before_after %>% 
-                                    group_by(ID) %>% 
-                                    summarise(all_unk = all(Sex == "UNK")) %>% 
-                                    pull(all_unk)), "\n")
+cat("QA COMPLETE - READY FOR PROPAGATION\n")
+cat("========================================\n")
+cat("Review the exported CSV files above.\n")
+cat("If conflicts found, resolve them in Script 03 before propagation.\n")
+cat("Next step: Run 03_finalize_LV_SS_and_export.R\n")
