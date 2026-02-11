@@ -69,7 +69,7 @@ clean_catalogue <- function(file_path) {
 
 #output LV------
 annual_mel <- clean_catalogue(here("INPUT/catalogue_files/SS_LV_Sex_2024.csv"))
-primary_mel <- clean_catalogue(here("INPUT/catalogue_files/LV_melons_primary.csv"))
+primary_mel <- clean_catalogue(here("INPUT/catalogue_files/LV_melon1988-2025_PRIMARY.csv"))
 
 
 # Function to assess when there are multiple distinct Sex classes ("FemaleJ" vs. "MaleM") exist per ID.
