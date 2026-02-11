@@ -8,7 +8,7 @@
 #              in the melon catalogue. Extracts sex from keywords across all
 #              photo types (melon, dorsal, etc.) and reports what sex was 
 #              determined in which years for melon photos specifically.
-# Changes: Initial version
+# Changes: Added chronological sorting for year columns in wide format output
 # ==============================================================================
 
 # LIBRARIES-------
@@ -17,7 +17,7 @@ pacman::p_load(dplyr, here, tidyverse, stringr, readr)
 # DATA IMPORT-------
 # Import melon catalogue data
 primary_mel <- read.csv(
-  here("INPUT/catalogue_files/LV_melon1988-2025_PRIMARY.csv"),  # UPDATE THIS PATH
+  here("INPUT/catalogue_files/LV_melon1988-2025_PRIMARY.csv"),
   colClasses = "character"
 )
 head(primary_mel)
@@ -119,7 +119,7 @@ id_years <- primary_mel %>%
     First_Year = min(YEAR),
     Last_Year = max(YEAR),
     Melon_Age = max(YEAR) - min(YEAR) + 1,
-    YRS_Since_Melon_Age = 2025-max(YEAR),
+    YRS_Since_Melon_Age = 2025 - max(YEAR),
     .groups = "drop"
   )
 
@@ -155,30 +155,12 @@ sex_timeline_melon <- sex_by_year_melon %>%
     names_prefix = "Year_"
   )
 
-cat("IDs with melon photos and sex info by year:", nrow(sex_timeline_melon), "\n")
-
-
-# DETAILED SEX HISTORY FOR EACH ID-------
-# For each ID, list all years with melon photos and the sex determination
-cat("\n=== CREATING DETAILED SEX HISTORY ===\n")
-
-sex_history_detailed <- primary_mel %>%
-  filter(Photo_Type == "Melon") %>%
-  group_by(ID, YEAR) %>%
-  summarise(
-    N_Melon_Photos = n(),
-    N_With_Sex = sum(!is.na(Sex)),
-    N_FemaleJ = sum(Sex == "FemaleJ", na.rm = TRUE),
-    N_MaleM = sum(Sex == "MaleM", na.rm = TRUE),
-    Sex_Annual = case_when(
-      N_FemaleJ > 0 & N_MaleM == 0 ~ "FemaleJ",
-      N_MaleM > 0 & N_FemaleJ == 0 ~ "MaleM",
-      N_FemaleJ > 0 & N_MaleM > 0 ~ "CONFLICT",
-      TRUE ~ "No Sex"
-    ),
-    .groups = "drop"
-  ) %>%
-  arrange(ID, YEAR)
+# Reorder columns so years are in chronological order
+year_cols <- names(sex_timeline_melon)[grepl("^Year_", names(sex_timeline_melon))]
+year_nums <- as.numeric(gsub("Year_", "", year_cols))
+year_cols_sorted <- year_cols[order(year_nums)]
+sex_timeline_melon <- sex_timeline_melon %>%
+  select(ID, all_of(year_cols_sorted))
 
 cat("IDs with melon photos and sex info by year:", nrow(sex_timeline_melon), "\n")
 
@@ -204,6 +186,8 @@ sex_history_detailed <- primary_mel %>%
     .groups = "drop"
   ) %>%
   arrange(ID, YEAR)
+
+cat("IDs with melon photos and sex info by year:", nrow(sex_timeline_melon), "\n")
 
 
 # CHECK FOR CONFLICTS-------
@@ -256,7 +240,7 @@ if (nrow(conflicts) > 0) {
     filter(ID %in% conflicts$ID, !is.na(Sex)) %>%
     select(ID, YEAR, Photo_Type, Sex, keyword) %>%
     arrange(ID, YEAR)
- }
+}
 
 
 # EXPORT SUMMARY FILES-------
