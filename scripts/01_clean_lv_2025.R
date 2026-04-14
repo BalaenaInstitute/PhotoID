@@ -14,7 +14,7 @@ pacman::p_load(dplyr, here, tidyverse, stringr, readr, sf,
 # DATA IMPORT-------
 # Import catalogue data with all columns as character type to preserve formatting
 LV_SS <- read.csv(
-  here("INPUT/catalogue_files/LV_SS_Primary_1988-2025-Jan182026.csv"), 
+  here("/Users/chirp/Desktop/List View.csv"), 
   colClasses = "character"
 )
 
@@ -83,12 +83,12 @@ if (nrow(non_numeric_ids) > 0) {
     mutate(ID = as.character(as.numeric(ID)))
 }
 
-# Remove records with missing or empty IDs
-cat("\n=== REMOVING RECORDS WITH NO VALID ID ===\n")
-cat("Records before filtering:", nrow(LV_SS), "\n")
-
-LV_SS <- LV_SS %>%
-  filter(!is.na(ID), ID != "")
+# # Remove records with missing or empty IDs
+# cat("\n=== REMOVING RECORDS WITH NO VALID ID ===\n")
+# cat("Records before filtering:", nrow(LV_SS), "\n")
+# 
+# LV_SS <- LV_SS %>%
+#   filter(!is.na(ID), ID != "")
 
 cat("Records after removing missing/invalid IDs:", nrow(LV_SS), "\n")
 cat("Final unique IDs:", n_distinct(LV_SS$ID), "\n")

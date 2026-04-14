@@ -7,9 +7,9 @@ pacman::p_load(dplyr, readr, stringr, lubridate, writexl, fs)
 # CHANGE AS NEEDED: ----
 
       #Set base directory
-      base_dir <- "~/your/file/path/here"
+      base_dir <- "INPUT/FB_files/"
       submitterID = "LJFeyrer"
-      locationID = "Scotian Shelf"
+      locationID = "Davis Strait"
 
 
 # Find all CSV files in nested directories----
@@ -96,7 +96,7 @@ pacman::p_load(dplyr, readr, stringr, lubridate, writexl, fs)
     df <- df %>%
       select(
         Encounter.mediaAsset0, Encounter.genus, Encounter.specificEpithet,
-        Latitude, Longitude, Encounter.year, Encounter.month, Encounter.day, Encounter.locationID,
+        Encounter.decimalLatitude = Latitude, Encounter.decimalLongitude = Longitude, Encounter.year, Encounter.month, Encounter.day, Encounter.locationID,
         Encounter.submitterID
       )
     

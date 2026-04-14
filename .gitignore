@@ -1,5 +1,6 @@
 .Rproj.user
 .Rhistory
+*.xl*
 .RData
 .Ruserdata
 .PhotoID.Rprog

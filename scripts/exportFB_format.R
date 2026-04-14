@@ -7,7 +7,7 @@ pacman::p_load(dplyr, readr, readxl, stringr, lubridate, writexl, fs, here)
 
 # 
 # Load FB export-----
-input_file <- "INPUT/FB_files/drone_LV.xlsx"
+input_file <- "INPUT/FB_files/LV_AR2024_L.xlsx"
 fb <- read_excel(input_file)
 
 # Extract relevant columns
@@ -28,4 +28,4 @@ fb_clean <- fb %>%
 print(fb_clean)
 
 # write to csv
-write_csv(fb_clean, "Output/FB_export_cleaned.csv")
+write_csv(fb_clean, "Output/FB_export_cleaned_AR_2024_L.csv")
