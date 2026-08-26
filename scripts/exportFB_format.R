@@ -7,13 +7,13 @@ pacman::p_load(dplyr, readr, readxl, stringr, lubridate, writexl, fs, here)
 
 # 
 # Load FB export-----
-input_file <- "INPUT/FB_files/LV_AR2024_L.xlsx"
-fb <- read_excel(input_file)
+input_file <- "/Users/chirp/CODE/PhotoID/INPUT/FB_files/encounterSearchResults_export_WRC.csv"
+fb <- read.csv(input_file)
 
 # Extract relevant columns
 fb_clean <- fb %>%
-  rename( `Encounter.mediaAsset0` = `File name`,
-          `Name0.value` = Title) 
+  rename( `File name` = `Encounter.mediaAsset0`,
+           Title = `Name0.value`) %>%select(`File name`, Title)
 # %>%
 #   mutate(
 #     # Reconstruct filename by inserting likely underscores
@@ -28,4 +28,4 @@ fb_clean <- fb %>%
 print(fb_clean)
 
 # write to csv
-write_csv(fb_clean, "Output/FB_export_cleaned_AR_2024_L.csv")
+write_csv(fb_clean, "Output/FB_export_cleaned_AR_2024WRC.csv")

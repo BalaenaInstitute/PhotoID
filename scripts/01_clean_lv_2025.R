@@ -14,12 +14,12 @@ pacman::p_load(dplyr, here, tidyverse, stringr, readr, sf,
 # DATA IMPORT-------
 # Import catalogue data with all columns as character type to preserve formatting
 LV_SS <- read.csv(
-  here("/Users/chirp/Desktop/List View.csv"), 
+  here('/Users/chirp/CODE/PhotoID/INPUT/FB_files/List View_left2024.csv'), 
   colClasses = "character"
 )
 
 # Set version identifier for output files
-version <- "2025_01"
+version <- "2025_02"
 
 cat("\n=== DATA IMPORTED ===\n")
 cat("Total records:", nrow(LV_SS), "\n")

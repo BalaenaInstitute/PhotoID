@@ -35,10 +35,18 @@ library(openxlsx)   # Export to .xlsx with hyperlink support
 #    https://www.flukebook.org/react/bulk-import-task?id=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
 # 3. Copy everything after ?id= and paste it below, replacing the existing UUID
 
-api_url <- "https://www.flukebook.org/api/v3/bulk-import/4ad7b6aa-4be2-4261-84c7-ed8a1a160c16"
+
+# 2024 left - 21614578-b25e-4b21-a88b-8f069b32d164
+# 2024 right - d54882ea-a236-4b67-b1f6-05434b52621a
+# 2022 - 9f977e1a-25ae-4331-8ec1-d95fee2c7512
+
+api_url <- "https://www.flukebook.org/api/v3/bulk-import/b9a24b75-0d75-4d13-add9-c66a7007d100"
 #                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #                                                         replace this UUID with the new one each time
 
+# --- Output file -- saves to your working directory ---
+# Update the filename to reflect the batch (e.g. flukebook_links_L2025.xlsx)
+output_file <- "OUTPUT/flukebook_links_WRC_2023.xlsx"
 
 # --- HOW TO GET A FRESH SESSION COOKIE ---
 # Your cookie expires when you log out, so grab a new one each time.
@@ -52,12 +60,10 @@ api_url <- "https://www.flukebook.org/api/v3/bulk-import/4ad7b6aa-4be2-4261-84c7
 # 8. Copy the value after JSESSIONID= (stop at the next semicolon)
 
 cookie_name  <- "JSESSIONID"
-cookie_value <- "D175C3FB83454FDC77D800E0A78A16B5"  # <- replace with fresh value each time
+cookie_value <- "EC6658BC63FC5D8F2677CD636E9738F8"  # <- replace with fresh value each time
 
 
-# --- Output file -- saves to your working directory ---
-# Update the filename to reflect the batch (e.g. flukebook_links_L2025.xlsx)
-output_file <- "flukebook_links_R2024.xlsx"
+
 
 
 # ==============================================================
@@ -106,15 +112,16 @@ links_df <- encounters %>%
   mutate(
     encounter_url = paste0("https://www.flukebook.org/encounters/encounter.jsp?number=", id)
   ) %>%
-  select(date, id, occurrenceId, numberMediaAssets, encounter_url, submitter.displayName)
-
+  select(date, id, occurrenceId, numberMediaAssets,
+         submitter.displayName,
+         encounter_url)   # <-- must be last
 
 # ==============================================================
 # 5. EXPORT TO EXCEL WITH CLICKABLE HYPERLINKS ----
 # ==============================================================
 
 # --- Identify which column number encounter_url falls in ---
-url_col <- which(names(links_df) == "encounter_url")
+url_col <- ncol(links_df)   # encounter_url is always last
 
 # --- Create workbook and sheet ---
 wb <- createWorkbook()
